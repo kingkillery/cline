@@ -22,6 +22,9 @@ import { ApiStream, ApiStreamUsageChunk } from "../transform/stream"
  * Routes to chatgpt.com/backend-api/codex
  */
 const CODEX_API_BASE_URL = "https://chatgpt.com/backend-api/codex"
+
+/** Hard timeout for individual API requests to prevent indefinite hangs */
+const REQUEST_TIMEOUT_MS = 180_000 // 3 minutes
 const CODEX_RESPONSES_WEBSOCKET_URL = "wss://chatgpt.com/backend-api/codex/responses"
 
 interface OpenAiCodexHandlerOptions extends CommonApiHandlerOptions {
@@ -240,7 +243,7 @@ export class OpenAiCodexHandler implements ApiHandler {
 					})
 
 				const stream = (await (client as any).responses.create(requestBody, {
-					signal: this.abortController.signal,
+					signal: AbortSignal.any([this.abortController.signal, AbortSignal.timeout(REQUEST_TIMEOUT_MS)]),
 					headers: codexHeaders,
 				})) as AsyncIterable<any>
 
@@ -508,7 +511,9 @@ export class OpenAiCodexHandler implements ApiHandler {
 				method: "POST",
 				headers,
 				body: JSON.stringify(requestBody),
-				signal: this.abortController?.signal,
+				signal: this.abortController
+					? AbortSignal.any([this.abortController.signal, AbortSignal.timeout(REQUEST_TIMEOUT_MS)])
+					: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
 			})
 
 			if (!response.ok) {
