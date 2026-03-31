@@ -107,6 +107,13 @@ export async function* runClaudeCode(options: ClaudeCodeOptions): AsyncGenerator
 		}
 
 		if (err instanceof Error) {
+			if ((err as any).timedOut) {
+				throw new Error(
+					`Claude Code process timed out after ${CLAUDE_CODE_TIMEOUT / 1000} seconds. The request may be too complex or the Claude Code CLI is unresponsive.`,
+					{ cause: err },
+				)
+			}
+
 			if (err.message.includes("ENOENT")) {
 				throw new Error(
 					`Failed to find the Claude Code executable.

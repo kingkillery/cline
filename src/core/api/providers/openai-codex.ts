@@ -25,6 +25,8 @@ const CODEX_API_BASE_URL = "https://chatgpt.com/backend-api/codex"
 
 /** Hard timeout for individual API requests to prevent indefinite hangs */
 const REQUEST_TIMEOUT_MS = 180_000 // 3 minutes
+/** Timeout for establishing the WebSocket connection */
+const WEBSOCKET_CONNECT_TIMEOUT_MS = 30_000 // 30 seconds
 const CODEX_RESPONSES_WEBSOCKET_URL = "wss://chatgpt.com/backend-api/codex/responses"
 
 interface OpenAiCodexHandlerOptions extends CommonApiHandlerOptions {
@@ -222,10 +224,27 @@ export class OpenAiCodexHandler implements ApiHandler {
 			}
 
 			if (useWebsocketMode) {
+				// Apply the same REQUEST_TIMEOUT_MS used for HTTP paths
+				const wsSignal = AbortSignal.any([this.abortController.signal, AbortSignal.timeout(REQUEST_TIMEOUT_MS)])
 				try {
-					yield* this.createResponseStreamWebsocket(requestBody, fallbackRequestBody, accessToken, codexHeaders, model)
+					yield* this.createResponseStreamWebsocket(
+						requestBody,
+						fallbackRequestBody,
+						accessToken,
+						codexHeaders,
+						model,
+						wsSignal,
+					)
 					return
 				} catch (error) {
+					// Don't fall back to HTTP on timeout/abort — same pattern as SDK path
+					const isTimeoutOrAbort =
+						(error instanceof DOMException && (error.name === "TimeoutError" || error.name === "AbortError")) ||
+						(error instanceof Error && /timed? ?out|abort/i.test(error.message))
+					if (isTimeoutOrAbort) {
+						Logger.error("OpenAI Codex websocket request timed out:", error)
+						throw error
+					}
 					Logger.error("OpenAI Codex websocket mode failed, falling back to HTTP Responses API:", error)
 					this.closeResponsesWebsocket()
 				}
@@ -286,10 +305,11 @@ export class OpenAiCodexHandler implements ApiHandler {
 		accessToken: string,
 		codexHeaders: Record<string, string>,
 		model: { id: string; info: ModelInfo },
+		signal: AbortSignal,
 	): ApiStream {
 		try {
-			for await (const event of this.createResponseEventsViaWebsocket(primaryParams, accessToken, codexHeaders)) {
-				if (this.abortController?.signal.aborted) {
+			for await (const event of this.createResponseEventsViaWebsocket(primaryParams, accessToken, codexHeaders, signal)) {
+				if (signal.aborted) {
 					return
 				}
 				yield* this.processEvent(event, model)
@@ -300,8 +320,13 @@ export class OpenAiCodexHandler implements ApiHandler {
 					"Retrying Codex websocket response with full context after previous_response_not_found or socket reset",
 				)
 				this.closeResponsesWebsocket()
-				for await (const event of this.createResponseEventsViaWebsocket(fallbackParams, accessToken, codexHeaders)) {
-					if (this.abortController?.signal.aborted) {
+				for await (const event of this.createResponseEventsViaWebsocket(
+					fallbackParams,
+					accessToken,
+					codexHeaders,
+					signal,
+				)) {
+					if (signal.aborted) {
 						return
 					}
 					yield* this.processEvent(event, model)
@@ -327,7 +352,11 @@ export class OpenAiCodexHandler implements ApiHandler {
 		return false
 	}
 
-	private async ensureResponsesWebsocket(accessToken: string, codexHeaders: Record<string, string>): Promise<UndiciWebSocket> {
+	private async ensureResponsesWebsocket(
+		accessToken: string,
+		codexHeaders: Record<string, string>,
+		signal?: AbortSignal,
+	): Promise<UndiciWebSocket> {
 		if (this.responsesWs && this.responsesWs.readyState === UndiciWebSocket.OPEN) {
 			return this.responsesWs
 		}
@@ -343,10 +372,29 @@ export class OpenAiCodexHandler implements ApiHandler {
 		})
 
 		await new Promise<void>((resolve, reject) => {
+			const timer = setTimeout(() => {
+				cleanup()
+				try {
+					ws.close()
+				} catch {}
+				const err: Error & { code?: string } = new Error("Timed out waiting for Codex Responses websocket to open")
+				err.code = "websocket_timeout"
+				reject(err)
+			}, WEBSOCKET_CONNECT_TIMEOUT_MS)
+
 			const cleanup = () => {
+				clearTimeout(timer)
 				ws.removeEventListener("open", handleOpen)
 				ws.removeEventListener("error", handleError)
 				ws.removeEventListener("close", handleClose)
+				signal?.removeEventListener("abort", handleAbort)
+			}
+			const handleAbort = () => {
+				cleanup()
+				try {
+					ws.close()
+				} catch {}
+				reject(new DOMException("Aborted", "AbortError"))
 			}
 			const handleOpen = () => {
 				cleanup()
@@ -360,6 +408,17 @@ export class OpenAiCodexHandler implements ApiHandler {
 				cleanup()
 				reject(new Error("Codex Responses websocket closed before opening"))
 			}
+
+			if (signal?.aborted) {
+				cleanup()
+				try {
+					ws.close()
+				} catch {}
+				reject(new DOMException("Aborted", "AbortError"))
+				return
+			}
+
+			signal?.addEventListener("abort", handleAbort, { once: true })
 			ws.addEventListener("open", handleOpen)
 			ws.addEventListener("error", handleError)
 			ws.addEventListener("close", handleClose)
@@ -382,6 +441,7 @@ export class OpenAiCodexHandler implements ApiHandler {
 		params: OpenAI.Responses.ResponseCreateParamsStreaming,
 		accessToken: string,
 		codexHeaders: Record<string, string>,
+		signal: AbortSignal,
 	): AsyncGenerator<OpenAI.Responses.ResponseStreamEvent> {
 		if (this.websocketRequestInFlight) {
 			const error: Error & { code?: string } = new Error("Websocket response.create is already in progress")
@@ -389,7 +449,7 @@ export class OpenAiCodexHandler implements ApiHandler {
 			throw error
 		}
 
-		const ws = await this.ensureResponsesWebsocket(accessToken, codexHeaders)
+		const ws = await this.ensureResponsesWebsocket(accessToken, codexHeaders, signal)
 		this.websocketRequestInFlight = true
 
 		const eventQueue: OpenAI.Responses.ResponseStreamEvent[] = []
@@ -473,9 +533,13 @@ export class OpenAiCodexHandler implements ApiHandler {
 			)
 
 			while (!completed || eventQueue.length > 0) {
+				if (signal.aborted) break
+
 				if (eventQueue.length === 0) {
 					await new Promise<void>((resolve) => {
 						resolver = resolve
+						// Wake up immediately if aborted or timed out
+						signal.addEventListener("abort", () => resolve(), { once: true })
 					})
 					continue
 				}
@@ -484,6 +548,16 @@ export class OpenAiCodexHandler implements ApiHandler {
 				if (event) {
 					yield event
 				}
+			}
+
+			if (signal.aborted) {
+				// Propagate timeout as an error so the caller doesn't silently succeed;
+				// user abort returns cleanly without yielding an error.
+				const reason = signal.reason
+				if (reason instanceof DOMException && reason.name === "TimeoutError") {
+					throw reason
+				}
+				return
 			}
 
 			if (failure) {
