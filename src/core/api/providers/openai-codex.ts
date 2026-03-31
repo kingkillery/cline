@@ -260,8 +260,19 @@ export class OpenAiCodexHandler implements ApiHandler {
 						yield outChunk
 					}
 				}
-			} catch (_sdkErr) {
-				// Fallback to manual SSE via fetch
+			} catch (sdkErr) {
+				// If this was a timeout or abort, do not fall back — the fallback would
+				// also time out and just double the total wait time.
+				const isTimeoutOrAbort =
+					(sdkErr instanceof DOMException && (sdkErr.name === "TimeoutError" || sdkErr.name === "AbortError")) ||
+					(sdkErr instanceof Error && /timed? ?out|abort/i.test(sdkErr.message))
+				if (isTimeoutOrAbort) {
+					Logger.error("OpenAI Codex SDK request timed out:", sdkErr)
+					throw sdkErr
+				}
+				// For other errors (e.g. SDK method not available), log and fall back to
+				// the manual SSE fetch path.
+				Logger.error("OpenAI Codex SDK request failed, falling back to fetch:", sdkErr)
 				yield* this.makeCodexRequest(requestBody, model, accessToken)
 			}
 		} finally {
