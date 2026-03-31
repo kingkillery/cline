@@ -762,6 +762,25 @@ describe("translateMessage - say messages", () => {
 		})
 	})
 
+	describe("api request messages", () => {
+		it("should translate say:api_req_started to agent_thought_chunk to keep ACP clients alive", () => {
+			const message = createClineMessage({
+				type: "say",
+				say: "api_req_started",
+				text: "",
+			})
+
+			const result = translateMessage(message, sessionState)
+
+			expect(result.updates).toHaveLength(1)
+			expect(result.updates[0].sessionUpdate).toBe("agent_thought_chunk")
+
+			const chunk = result.updates[0] as acp.ContentChunk & { sessionUpdate: "agent_thought_chunk" }
+			expect(chunk.content.type).toBe("text")
+			expect((chunk.content as acp.TextContent).text).toBe("Waiting for model response...")
+		})
+	})
+
 	describe("task progress messages", () => {
 		it("should translate say:task_progress to plan update", () => {
 			const message = createClineMessage({

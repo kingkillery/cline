@@ -1,0 +1,20 @@
+{
+  "branchName": "main",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Validate the Codex and ACP fix set using a fresh-context worker iteration",
+      "acceptanceCriteria": [
+        "Inspect the current repository state from disk instead of relying on prior context",
+        "Confirm cli/src/agent/ClineAgent.ts exposes openai-codex in ACP model enumeration",
+        "Confirm cli/src/agent/messageTranslator.ts emits an immediate agent_thought_chunk for api_req_started",
+        "Confirm src/shared/storage/provider-keys.ts includes a default model mapping for openai-codex",
+        "Update scripts/ralph/progress.txt with verification notes, learnings, and any blocker",
+        "Set passes=true only if the current repo state already achieves the intended functionality without additional required code changes"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Use lightweight local commands and file inspection. Do not create commits."
+    }
+  ]
+}

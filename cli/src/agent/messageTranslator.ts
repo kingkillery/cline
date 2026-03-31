@@ -302,11 +302,15 @@ function translateSayMessage(
 			break
 
 		case "api_req_started":
-			// API request started - could be shown as agent thinking
-			// updates.push({
-			// 	sessionUpdate: "agent_thought_chunk",
-			// 	content: { type: "text", text: "Making API Request" },
-			// })
+			// Emit a lightweight thought chunk so ACP clients see forward progress
+			// immediately, even when the provider stays silent until the first token.
+			updates.push({
+				sessionUpdate: "agent_thought_chunk",
+				content: {
+					type: "text",
+					text: message.text?.trim() || "Waiting for model response...",
+				},
+			})
 			break
 
 		case "api_req_finished":

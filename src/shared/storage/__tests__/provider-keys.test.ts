@@ -1,4 +1,4 @@
-import { moonshotDefaultModelId } from "@shared/api"
+import { moonshotDefaultModelId, openAiCodexDefaultModelId } from "@shared/api"
 import { expect } from "chai"
 import { describe, it } from "mocha"
 import { getProviderDefaultModelId, getProviderModelIdKey } from "../provider-keys"
@@ -6,6 +6,10 @@ import { getProviderDefaultModelId, getProviderModelIdKey } from "../provider-ke
 describe("Provider key mapping", () => {
 	it("returns Moonshot default model ID", () => {
 		expect(getProviderDefaultModelId("moonshot")).to.equal(moonshotDefaultModelId)
+	})
+
+	it("returns OpenAI Codex default model ID", () => {
+		expect(getProviderDefaultModelId("openai-codex")).to.equal(openAiCodexDefaultModelId)
 	})
 
 	it("uses generic model key for Moonshot", () => {

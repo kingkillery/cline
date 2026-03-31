@@ -17,6 +17,7 @@ import {
 	minimaxDefaultModelId,
 	moonshotDefaultModelId,
 	nousResearchDefaultModelId,
+	openAiCodexDefaultModelId,
 	openAiNativeDefaultModelId,
 	openRouterDefaultModelId,
 	requestyDefaultModelId,
@@ -116,6 +117,7 @@ const ProviderDefaultModelMap: Partial<Record<ApiProvider, string>> = {
 	qwen: internationalQwenDefaultModelId,
 	deepseek: deepSeekDefaultModelId,
 	wandb: wandbDefaultModelId,
+	"openai-codex": openAiCodexDefaultModelId,
 } as const
 
 /**

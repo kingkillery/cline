@@ -1,0 +1,47 @@
+# Ralph Progress Log
+Started: 2026-03-31
+Outcome: Full intended functionality
+
+## Codebase Patterns
+- ACP model availability for CLI agents is assembled in `cli/src/agent/ClineAgent.ts`.
+- ACP client-visible streaming updates are translated in `cli/src/agent/messageTranslator.ts`.
+- Shared provider default model resolution is handled in `src/shared/storage/provider-keys.ts`.
+- This repo may be dirty during task work; unrelated changes must be preserved.
+
+## Key Files
+- cli/src/agent/ClineAgent.ts
+- cli/src/agent/messageTranslator.ts
+- src/shared/storage/provider-keys.ts
+- cli/src/agent/ClineAgent.test.ts
+- cli/src/agent/messageTranslator.test.ts
+- src/shared/storage/__tests__/provider-keys.test.ts
+
+---
+
+## Iteration 1 Verification
+- Re-read the active repo state from disk for `cli/src/agent/ClineAgent.ts`, `cli/src/agent/messageTranslator.ts`, `src/shared/storage/provider-keys.ts`, and the Ralph state files.
+- Verified `cli/src/agent/ClineAgent.ts` imports `openAiCodexDefaultModelId` and `openAiCodexModels`, includes `"openai-codex"` in `providerModels`, and configures ACP/OpenAI Codex auth handling.
+- Verified `cli/src/agent/messageTranslator.ts` handles `api_req_started` by emitting an immediate `agent_thought_chunk` with either trimmed message text or `Waiting for model response...`.
+- Verified `src/shared/storage/provider-keys.ts` imports `openAiCodexDefaultModelId` and maps `"openai-codex"` in `ProviderDefaultModelMap`.
+- Verified focused tests exist for the intended behavior in `cli/src/agent/ClineAgent.test.ts`, `cli/src/agent/messageTranslator.test.ts`, and `src/shared/storage/__tests__/provider-keys.test.ts`.
+
+## Lightweight Command Evidence
+- `rg -n 'openai-codex|openAiCodex' cli/src/agent/ClineAgent.ts` showed the provider model entry and OAuth/default-model wiring.
+- `rg -n 'api_req_started|agent_thought_chunk|Waiting for model response' cli/src/agent/messageTranslator.ts` showed the immediate thought-chunk emission path.
+- `rg -n 'openai-codex|openAiCodexDefaultModelId' src/shared/storage/provider-keys.ts` showed the default model mapping.
+
+## Learnings
+- ACP model enumeration depends on `providerModels` plus `getSessionModelState`, so adding `openai-codex` there is sufficient for client-visible model listing when that provider is selected.
+- The `api_req_started` translator case is intentionally lightweight and exists to surface progress before the provider streams its first token.
+- Default model resolution for providers without a provider-specific key still works through the generic `actModeApiModelId` and `planModeApiModelId` path.
+
+## Blockers
+- No code blocker remains for this story.
+- Targeted test execution was partially blocked by the local environment:
+- PowerShell execution policy blocked direct `npx`.
+- Re-running through `cmd /c` avoided that policy issue, but Vitest failed with `spawn EPERM` when starting workers and Mocha failed due to an existing local module-resolution/setup issue in the repo test harness.
+- These test-runner issues did not reveal a code gap in the targeted functionality.
+
+## Outcome
+- No additional code changes were required to satisfy the active story.
+- Story passes based on current on-disk repo state and focused file-level verification.

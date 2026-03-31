@@ -31,6 +31,7 @@ import {
 	moonshotDefaultModelId,
 	moonshotModels,
 	openAiCodexDefaultModelId,
+	openAiCodexModels,
 	openAiNativeDefaultModelId,
 	openAiNativeModels,
 	xaiDefaultModelId,
@@ -72,6 +73,7 @@ import { type AcpSessionState } from "./types.js"
 // Map providers to their static model lists and defaults (copied from ModelPicker.tsx)
 const providerModels: Record<string, { models: Record<string, unknown>; defaultId: string }> = {
 	anthropic: { models: anthropicModels, defaultId: anthropicDefaultModelId },
+	"openai-codex": { models: openAiCodexModels, defaultId: openAiCodexDefaultModelId },
 	"openai-native": { models: openAiNativeModels, defaultId: openAiNativeDefaultModelId },
 	gemini: { models: geminiModels, defaultId: geminiDefaultModelId },
 	bedrock: { models: bedrockModels, defaultId: bedrockDefaultModelId },
