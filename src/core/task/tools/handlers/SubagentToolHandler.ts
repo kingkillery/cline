@@ -241,7 +241,7 @@ export class UseSubagentsToolHandler implements IFullyManagedTool {
 			if (update.error !== undefined) {
 				current.error = update.error
 			}
-			if (update.latestToolCall !== undefined) {
+			if ("latestToolCall" in update && update.latestToolCall !== undefined) {
 				current.latestToolCall = update.latestToolCall
 			}
 			if (update.stats) {
