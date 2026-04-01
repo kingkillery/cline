@@ -1,20 +1,56 @@
 {
-  "branchName": "main",
-  "userStories": [
-    {
-      "id": "US-001",
-      "title": "Validate the Codex and ACP fix set using a fresh-context worker iteration",
-      "acceptanceCriteria": [
-        "Inspect the current repository state from disk instead of relying on prior context",
-        "Confirm cli/src/agent/ClineAgent.ts exposes openai-codex in ACP model enumeration",
-        "Confirm cli/src/agent/messageTranslator.ts emits an immediate agent_thought_chunk for api_req_started",
-        "Confirm src/shared/storage/provider-keys.ts includes a default model mapping for openai-codex",
-        "Update scripts/ralph/progress.txt with verification notes, learnings, and any blocker",
-        "Set passes=true only if the current repo state already achieves the intended functionality without additional required code changes"
-      ],
-      "priority": 1,
-      "passes": true,
-      "notes": "Use lightweight local commands and file inspection. Do not create commits."
-    }
-  ]
+	"branchName": "main",
+	"userStories": [
+		{
+			"id": "US-001",
+			"title": "Disable parallel subagent fan-out for kanban autonomous runs",
+			"acceptanceCriteria": [
+				"The Ralph worker verifies the repo state from disk before making decisions and limits itself to the active story",
+				"Kanban or autonomous card runs no longer use concurrent Promise.allSettled fan-out for subagent prompts",
+				"Kanban or autonomous card runs either disable use_subagents entirely or enforce maxParallelSubagentsPerRun=1 with serial execution",
+				"scripts/ralph/progress.txt is updated with proof commands, changed files, learnings, and any blocker for this story",
+				"Set passes=true only if the repo now contains a concrete, repo-verifiable implementation of the fan-out guard"
+			],
+			"priority": 1,
+			"passes": true,
+			"dependsOn": [],
+			"notes": "Target the existing kanban/autonomous execution path, not all subagent usage globally. Do not create commits."
+		},
+		{
+			"id": "US-002",
+			"title": "Add a persisted kanban run coordinator with lease heartbeat retry and cleanup ownership",
+			"acceptanceCriteria": [
+				"A kanban-owned run coordinator or equivalent control-plane abstraction exists in the repo",
+				"The run state persists runId, cardId, sessionId, workspacePath, status, attempt, leaseExpiresAt, heartbeatAt, retryDueAt, childPids, lastError, and proofBundle",
+				"Startup reconciliation exists and requeues, expires, or cleans up stale runs before new work starts",
+				"Retry metadata and cleanup ownership are attached to the coordinator rather than left implicit inside worker sessions",
+				"scripts/ralph/progress.txt is updated with proof commands, changed files, learnings, and any blocker for this story",
+				"Set passes=true only if the repo now contains concrete persisted-state and reconciliation wiring for the coordinator"
+			],
+			"priority": 2,
+			"passes": true,
+			"dependsOn": [
+				"US-001"
+			],
+			"notes": "Reuse small JSON snapshot persistence for MVP. Do not add a database. Do not create commits."
+		},
+		{
+			"id": "US-003",
+			"title": "Require per-card worktree isolation and proof-of-work before Human Review",
+			"acceptanceCriteria": [
+				"Autonomous kanban card runs execute inside dedicated git worktrees under a deterministic runtime root",
+				"Run metadata records the branch or worktree path used by the card run",
+				"Cards cannot advance to Human Review until a proof bundle is present and validated by the control plane",
+				"The MVP proof bundle contains validation command evidence, outcome, changed-files summary, workspace or branch identity, latest commit SHA if present, and optional UI artifact path",
+				"scripts/ralph/progress.txt is updated with proof commands, changed files, learnings, and any blocker for this story",
+				"Set passes=true only if the repo now contains concrete worktree isolation and Human Review proof gating behavior"
+			],
+			"priority": 3,
+			"passes": true,
+			"dependsOn": [
+				"US-002"
+			],
+			"notes": "Do not switch to full repo clones or remote workers. Keep the MVP local and minimally invasive. Do not create commits."
+		}
+	]
 }

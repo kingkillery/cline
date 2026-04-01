@@ -254,7 +254,7 @@ describe("SubagentToolHandler", () => {
 		assert.ok(subagentStatusCalls.length >= 1)
 	})
 
-	it("fans out prompts in parallel and emits aggregated status", async () => {
+	it("runs subagent prompts in parallel and emits aggregated status", async () => {
 		const { config, callbacks } = createConfig({ autoApproveSafe: true, autoApproveAll: true })
 		let activeRuns = 0
 		let maxActiveRuns = 0
@@ -309,7 +309,7 @@ describe("SubagentToolHandler", () => {
 
 		assert.equal(typeof result, "string")
 		assert.ok((result as string).includes("Total: 3"))
-		assert.ok(maxActiveRuns > 1)
+		assert.equal(maxActiveRuns, 3)
 
 		const subagentStatusCalls = callbacks.say.getCalls().filter((call) => call.args[0] === "subagent")
 		assert.ok(subagentStatusCalls.length >= 2)
