@@ -53,7 +53,9 @@ export type {
 
 export type {
 	AcpAgentOptions,
+	AcpSessionProcessingStatus,
 	AcpSessionState,
+	AcpSessionWaitTarget,
 	ClineAgentCapabilities,
 	ClineAgentInfo,
 	ClineAgentOptions,

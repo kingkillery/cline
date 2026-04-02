@@ -5,6 +5,7 @@
 ### Added
 
 - Latency improvements for remote workspaces
+- Expose structured ACP session processing metadata (`processingStatus.startedAt`, `lastVisibleUpdateAt`, `waitingOn`, `stalled`) for Kanban and other session monitors
 
 ## [2.8.2]
 

@@ -4,7 +4,7 @@ import path from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import { StateManager } from "@/core/storage/StateManager"
 import { openAiCodexDefaultModelId, openAiCodexModels } from "@/shared/api"
-import { ClineAgent } from "./ClineAgent"
+import { ClineAgent, getProcessingStatusSnapshot } from "./ClineAgent"
 
 describe("ClineAgent session model state", () => {
 	let clineDir: string
@@ -42,6 +42,31 @@ describe("ClineAgent session model state", () => {
 		expect(modelState.availableModels).toContainEqual({
 			modelId: `openai-codex/${openAiCodexDefaultModelId}`,
 			name: openAiCodexDefaultModelId,
+		})
+	})
+})
+
+describe("getProcessingStatusSnapshot", () => {
+	it("stays quiet before the heartbeat threshold", () => {
+		expect(getProcessingStatusSnapshot(14_000, false)).toEqual({
+			waitingOn: "model",
+			stalled: false,
+		})
+	})
+
+	it("reports active waiting after the heartbeat threshold", () => {
+		expect(getProcessingStatusSnapshot(15_000, false)).toEqual({
+			waitingOn: "model",
+			stalled: false,
+			heartbeatText: "Still working... waiting for model output (15s since the last visible update).",
+		})
+	})
+
+	it("escalates to a stalled warning after the stalled threshold", () => {
+		expect(getProcessingStatusSnapshot(45_000, true)).toEqual({
+			waitingOn: "tool",
+			stalled: true,
+			heartbeatText: "Still working, but there has been no visible tool output for 45s. This may be slow or stuck.",
 		})
 	})
 })

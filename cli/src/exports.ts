@@ -19,8 +19,10 @@ export { ClineAgent } from "./agent/ClineAgent.js"
 export { ClineSessionEmitter } from "./agent/ClineSessionEmitter.js"
 export type {
 	AcpAgentOptions,
+	AcpSessionProcessingStatus,
 	AcpSessionState,
 	AcpSessionStatus,
+	AcpSessionWaitTarget,
 	Agent,
 	AgentSideConnection,
 	AudioContent,

@@ -134,8 +134,25 @@ Access session metadata via the read-only `sessions` map:
 
 ```typescript
 const session = agent.sessions.get(sessionId)
-// { sessionId, cwd, mode, mcpServers, createdAt, lastActivityAt, ... }
+// {
+//   sessionId, cwd, mode, mcpServers, createdAt, lastActivityAt,
+//   processingStatus?: {
+//     startedAt: number
+//     lastVisibleUpdateAt: number
+//     waitingOn: "model" | "tool"
+//     stalled: boolean
+//   }
+// }
 ```
+
+While a prompt is actively running, `session.processingStatus` gives consumers a structured progress signal:
+
+- `startedAt`: when the current prompt began processing
+- `lastVisibleUpdateAt`: when the agent last emitted a non-heartbeat update
+- `waitingOn`: whether visible progress is currently blocked on `"model"` or `"tool"`
+- `stalled`: whether the current silence window has crossed the stalled threshold
+
+This is the preferred status source for Kanban-style UIs and other session monitors. It is more stable than parsing heartbeat text from streamed message chunks.
 
 ### Prompting
 
@@ -727,9 +744,11 @@ All types are re-exported from the `cline` package. Key types:
 | `ClineSessionEmitter` | Typed event emitter for session events |
 | `ClineAgentOptions` | Constructor options (`debug`, `clineDir`, `hooksDir`) |
 | `ClineAcpSession` | Session metadata (read-only) |
+| `AcpSessionProcessingStatus` | Structured processing metadata for active prompts |
 | `ClineSessionEvents` | Event name → handler signature map |
 | `AcpSessionStatus` | Session lifecycle enum: `Idle`, `Processing`, `Cancelled` |
 | `AcpSessionState` | Session state tracking (status, pending tool calls) |
+| `AcpSessionWaitTarget` | `"model"` or `"tool"` for the current wait source |
 | `PermissionHandler` | `(request: RequestPermissionRequest) => Promise<RequestPermissionResponse>` |
 | `RequestPermissionRequest` | Permission request details (sessionId, toolCall, options) |
 | `RequestPermissionResponse` | Permission response with outcome |

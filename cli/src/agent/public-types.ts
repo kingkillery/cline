@@ -106,12 +106,29 @@ export interface ClineAcpSession {
 	createdAt: number
 	/** Timestamp of last activity */
 	lastActivityAt: number
+	/** Structured processing metadata for active prompts */
+	processingStatus?: AcpSessionProcessingStatus
 	/** Whether this session was loaded from history (needs resume on first prompt) */
 	isLoadedFromHistory?: boolean
 	/** Model ID override for plan mode (format: "provider/modelId") */
 	planModeModelId?: string
 	/** Model ID override for act mode (format: "provider/modelId") */
 	actModeModelId?: string
+}
+
+/** What the session is currently waiting on while processing. */
+export type AcpSessionWaitTarget = "model" | "tool"
+
+/** Structured status for long-running prompt processing. */
+export interface AcpSessionProcessingStatus {
+	/** Timestamp when the current prompt started processing */
+	startedAt: number
+	/** Timestamp of the last non-heartbeat update emitted to the client */
+	lastVisibleUpdateAt: number
+	/** Whether the current silence window looks stalled */
+	stalled: boolean
+	/** The subsystem currently blocking visible progress */
+	waitingOn: AcpSessionWaitTarget
 }
 
 /**
