@@ -39,16 +39,17 @@ export function isAllowedCrossColumnCardMove(
 	if (fromColumnId === "trash" && toColumnId === "review") {
 		return true;
 	}
-	if (
-		(fromColumnId === "in_progress" && toColumnId === "review") ||
-		(fromColumnId === "review" && toColumnId === "in_progress")
-	) {
+	if (fromColumnId === "in_progress" && toColumnId === "review") {
 		return isMatchingProgrammaticCardMove(
 			options?.taskId,
 			fromColumnId,
 			toColumnId,
 			options?.programmaticCardMoveInFlight,
 		);
+	}
+	// Allow manual drag from review back to in_progress for retry workflows
+	if (fromColumnId === "review" && toColumnId === "in_progress") {
+		return true;
 	}
 	return false;
 }

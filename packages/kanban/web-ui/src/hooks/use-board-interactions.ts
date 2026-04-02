@@ -19,6 +19,7 @@ import {
 } from "@/state/board-state";
 import { clearTaskWorkspaceInfo, setTaskWorkspaceInfo } from "@/stores/workspace-metadata-store";
 import type { SendTerminalInputOptions } from "@/terminal/terminal-input";
+import type { RetryMode } from "@/components/retry-task-dialog";
 import type { BoardCard, BoardColumnId, BoardData } from "@/types";
 import { resolveTaskAutoReviewMode } from "@/types";
 import { getNextDetailTaskIdAfterTrashMove } from "@/utils/detail-view-task-order";
@@ -91,6 +92,9 @@ export interface UseBoardInteractionsResult {
 	handleSendReviewComments: (taskId: string, text: string) => Promise<void>;
 	moveToTrashLoadingById: Record<string, boolean>;
 	trashTaskCount: number;
+	pendingRetryTask: { taskId: string; card: BoardCard } | null;
+	handleRetryTask: (mode: RetryMode, editedPrompt?: string) => Promise<void>;
+	handleCancelRetry: () => void;
 }
 
 export function useBoardInteractions({
@@ -121,6 +125,7 @@ export function useBoardInteractions({
 		Record<string, PendingProgrammaticStartMoveCompletion>
 	>({});
 	const [moveToTrashLoadingById, setMoveToTrashLoadingById] = useState<Record<string, boolean>>({});
+	const [pendingRetryTask, setPendingRetryTask] = useState<{ taskId: string; card: BoardCard } | null>(null);
 	const {
 		handleProgrammaticCardMoveReady,
 		setRequestMoveTaskToTrashHandler,
@@ -632,6 +637,15 @@ export function useBoardInteractions({
 
 			setBoard(applied.board);
 
+			// Review → In Progress: show retry dialog instead of auto-starting
+			if (moveEvent.fromColumnId === "review" && moveEvent.toColumnId === "in_progress") {
+				const movedSelection = findCardSelection(applied.board, moveEvent.taskId);
+				if (movedSelection) {
+					setPendingRetryTask({ taskId: moveEvent.taskId, card: movedSelection.card });
+				}
+				return;
+			}
+
 			if (
 				moveEvent.toColumnId === "in_progress" &&
 				moveEvent.fromColumnId === "backlog" &&
@@ -874,6 +888,58 @@ export function useBoardInteractions({
 		resetBoardInteractionsState();
 	}, [currentProjectId, resetBoardInteractionsState]);
 
+	const handleRetryTask = useCallback(
+		async (mode: RetryMode, editedPrompt?: string) => {
+			if (!pendingRetryTask) {
+				return;
+			}
+			const { taskId, card } = pendingRetryTask;
+			setPendingRetryTask(null);
+
+			// Update prompt if edited
+			if (editedPrompt && editedPrompt !== card.prompt) {
+				setBoard((currentBoard) => {
+					const updated = updateTask(currentBoard, taskId, {
+						prompt: editedPrompt,
+						startInPlanMode: card.startInPlanMode,
+						autoReviewEnabled: card.autoReviewEnabled ?? false,
+						autoReviewMode: resolveTaskAutoReviewMode(card.autoReviewMode),
+						baseRef: card.baseRef,
+					});
+					return updated.updated ? updated.board : currentBoard;
+				});
+			}
+
+			const taskCard = editedPrompt ? { ...card, prompt: editedPrompt } : card;
+
+			if (mode === "fresh") {
+				// Delete existing worktree and start fresh
+				await cleanupTaskWorkspace(taskId);
+				clearTaskWorkspaceInfo(taskId);
+				void kickoffTaskInProgress(taskCard, taskId, "in_progress");
+			} else {
+				// "worktree" mode: rerun on existing worktree
+				const started = await startTaskSession(taskCard);
+				if (!started.ok) {
+					notifyError(started.message ?? "Could not restart task session.");
+				}
+			}
+		},
+		[pendingRetryTask, cleanupTaskWorkspace, kickoffTaskInProgress, setBoard, startTaskSession],
+	);
+
+	const handleCancelRetry = useCallback(() => {
+		if (!pendingRetryTask) {
+			return;
+		}
+		// Move card back to review
+		setBoard((currentBoard) => {
+			const moved = moveTaskToColumn(currentBoard, pendingRetryTask.taskId, "review", { insertAtTop: true });
+			return moved.moved ? moved.board : currentBoard;
+		});
+		setPendingRetryTask(null);
+	}, [pendingRetryTask, setBoard]);
+
 	return {
 		handleProgrammaticCardMoveReady,
 		confirmMoveTaskToTrash,
@@ -894,5 +960,8 @@ export function useBoardInteractions({
 		handleSendReviewComments,
 		moveToTrashLoadingById,
 		trashTaskCount,
+		pendingRetryTask,
+		handleRetryTask,
+		handleCancelRetry,
 	};
 }

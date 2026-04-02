@@ -8,6 +8,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { notifyError, showAppToast } from "@/components/app-toaster";
 import { CardDetailView } from "@/components/card-detail-view";
 import { ClearTrashDialog } from "@/components/clear-trash-dialog";
+import { RetryTaskDialog } from "@/components/retry-task-dialog";
 import { DebugDialog } from "@/components/debug-dialog";
 import { AgentTerminalPanel } from "@/components/detail-panels/agent-terminal-panel";
 import { GitHistoryView } from "@/components/git-history-view";
@@ -570,6 +571,9 @@ export default function App(): ReactElement {
 		handleSendReviewComments,
 		moveToTrashLoadingById,
 		trashTaskCount,
+		pendingRetryTask,
+		handleRetryTask,
+		handleCancelRetry,
 	} = useBoardInteractions({
 		board,
 		setBoard,
@@ -1056,6 +1060,16 @@ export default function App(): ReactElement {
 				branchRef={newTaskBranchRef}
 				branchOptions={createTaskBranchOptions}
 				onBranchRefChange={setNewTaskBranchRef}
+			/>
+			<RetryTaskDialog
+				open={pendingRetryTask !== null}
+				onOpenChange={(open) => {
+					if (!open) {
+						handleCancelRetry();
+					}
+				}}
+				taskPrompt={pendingRetryTask?.card.prompt ?? ""}
+				onRetry={handleRetryTask}
 			/>
 			<ClearTrashDialog
 				open={isClearTrashDialogOpen}
