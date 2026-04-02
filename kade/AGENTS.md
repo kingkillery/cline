@@ -25,6 +25,10 @@
 - Default branch appears to be `main`
 - Current workflow should assume feature work branches off `main` unless project instructions say otherwise
 
+## Architecture Findings
+
+The repo has three separate UI surfaces that do NOT share rendering code: the VS Code extension webview (`webview-ui/`), the CLI TUI (`cli/src/components/`), and the Kanban board (`github.com/cline/kanban`, a separate npm package). Changes to `webview-ui/` only affect the VS Code extension. The Kanban board (v0.1.52) orchestrates agent CLIs (Cline, Claude Code, Codex) as subprocesses and has its own bundled web UI at `localhost:3484`. It does NOT use the locally linked `cline` CLI library. Proto changes (`proto/`) require `npm run protos` and affect all three packages, but webview rendering must be updated independently in each surface. The CLI agent in `cli/src/agent/ClineAgent.ts` bridges extension core messages to ACP consumers (including Kanban) via `emitSessionUpdate`, but the Kanban board only renders `agent_message_chunk` events as card text, not as structured phase indicators. Adding new `ClineSay` types requires updates in four places: the type union, the proto enum, and both directions of the proto conversion mapping.
+
 ## Safety Boundaries
 ### Always ask before:
 - Deleting files or data
