@@ -367,6 +367,11 @@ function translateSayMessage(
 			// sufficient user-facing feedback.
 			break
 
+		case "task_phase":
+			// Task phase updates are handled directly in processMessageWithDelta
+			// to update session processingStatus rather than emitting as chat messages.
+			break
+
 		case "info":
 		case "shell_integration_warning":
 		case "shell_integration_warning_with_suggestion":

@@ -110,6 +110,8 @@ export interface ExtensionState {
 	doubleCheckCompletionEnabled?: boolean
 	lazyTeammateModeEnabled?: boolean
 	showFeatureTips?: boolean
+	plainModeEnabled?: boolean
+	animationsEnabled?: boolean
 	banners?: BannerCardData[]
 	welcomeBanners?: BannerCardData[]
 	openAiCodexIsAuthenticated?: boolean
@@ -193,6 +195,7 @@ export type ClineSay =
 	| "use_subagents"
 	| "subagent_usage"
 	| "conditional_rules_applied"
+	| "task_phase"
 
 export interface ClineSayTool {
 	tool:

@@ -153,6 +153,21 @@ export const MessagesArea: React.FC<MessagesAreaProps> = ({
 		return isWaitingForResponse || handoffToReasoningPending
 	}, [isWaitingForResponse, lastRawMessage, lastVisibleMessage?.say])
 
+	// Track the latest task_phase message to display dynamic status labels
+	const latestPhaseLabel = useMemo(() => {
+		for (let i = clineMessages.length - 1; i >= 0; i--) {
+			const msg = clineMessages[i]
+			if (msg.type === "say" && msg.say === "task_phase" && msg.partial === true && msg.text) {
+				return msg.text
+			}
+			// Stop searching once we hit a non-phase message that isn't transient
+			if (msg.type === "ask" || (msg.type === "say" && msg.say !== "task_phase" && msg.say !== "reasoning")) {
+				break
+			}
+		}
+		return undefined
+	}, [clineMessages])
+
 	const displayedGroupedMessages = useMemo<(ClineMessage | ClineMessage[])[]>(() => {
 		if (!showThinkingLoaderRow) {
 			return groupedMessages
@@ -162,10 +177,10 @@ export const MessagesArea: React.FC<MessagesAreaProps> = ({
 			type: "say",
 			say: "reasoning",
 			partial: true,
-			text: "",
+			text: latestPhaseLabel || "",
 		}
 		return [...groupedMessages, waitingRow]
-	}, [groupedMessages, showThinkingLoaderRow])
+	}, [groupedMessages, showThinkingLoaderRow, latestPhaseLabel])
 
 	const itemContent = useMemo(
 		() =>

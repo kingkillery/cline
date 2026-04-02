@@ -358,4 +358,42 @@
 			@apply inline-block w-0.5 h-[1em] ml-0.5 bg-foreground align-text-bottom animate-cursor-blink;
 		}
 	}
+
+	/* Animation gating: disable all animations and transitions when toggled off */
+	[data-animations-disabled] *,
+	[data-animations-disabled] *::before,
+	[data-animations-disabled] *::after {
+		animation-duration: 0s !important;
+		transition-duration: 0s !important;
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		*,
+		*::before,
+		*::after {
+			animation-duration: 0s !important;
+			transition-duration: 0s !important;
+		}
+	}
+
+	/* Plain mode: hide secondary UI elements */
+	[data-plain-mode] .plain-hide {
+		display: none !important;
+	}
+
+	/* New animations for streaming and content entry */
+	@keyframes contentSlideIn {
+		from {
+			opacity: 0;
+			transform: translateY(8px);
+		}
+		to {
+			opacity: 1;
+			transform: translateY(0);
+		}
+	}
+
+	.animate-content-slide-in {
+		animation: contentSlideIn 0.3s ease-out;
+	}
 }

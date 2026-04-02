@@ -352,6 +352,14 @@ export async function updateSettings(controller: Controller, request: UpdateSett
 			controller.stateManager.setGlobalState("showFeatureTips", request.showFeatureTips)
 		}
 
+		if (request.plainModeEnabled !== undefined) {
+			controller.stateManager.setGlobalState("plainModeEnabled", request.plainModeEnabled)
+		}
+
+		if (request.animationsEnabled !== undefined) {
+			controller.stateManager.setGlobalState("animationsEnabled", request.animationsEnabled)
+		}
+
 		// Post updated state to webview
 		await controller.postStateToWebview()
 

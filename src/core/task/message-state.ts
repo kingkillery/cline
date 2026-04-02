@@ -159,6 +159,9 @@ export class MessageStateHandler extends EventEmitter<MessageStateHandlerEvents>
 				isFavorited: this.taskIsFavorited,
 				checkpointManagerErrorMessage: this.taskState.checkpointManagerErrorMessage,
 				modelId: lastModelInfo?.modelInfo?.modelId,
+				providerId: lastModelInfo?.modelInfo?.providerId,
+				mode: lastModelInfo?.modelInfo?.mode,
+				status: this.taskState.abort ? "cancelled" : "completed",
 			})
 		} catch (error) {
 			Logger.error("Failed to save cline messages:", error)

@@ -33,6 +33,11 @@ const HISTORY_FILTERS = {
 	mostRelevant: "Most Relevant",
 	workspaceOnly: "Workspace Only",
 	favoritesOnly: "Favorites Only",
+	statusCompleted: "Status: Completed",
+	statusError: "Status: Error",
+	statusInProgress: "Status: In Progress",
+	modePlan: "Mode: Plan",
+	modeAct: "Mode: Act",
 }
 
 const HistoryView = ({ onDone }: HistoryViewProps) => {
@@ -45,6 +50,8 @@ const HistoryView = ({ onDone }: HistoryViewProps) => {
 	const [selectedItems, setSelectedItems] = useState<string[]>([])
 	const [showFavoritesOnly, setShowFavoritesOnly] = useState(false)
 	const [showCurrentWorkspaceOnly, setShowCurrentWorkspaceOnly] = useState(false)
+	const [statusFilter, setStatusFilter] = useState<string>("all")
+	const [modeFilter, setModeFilter] = useState<string>("all")
 
 	// Keep track of pending favorite toggle operations
 	const [pendingFavoriteToggles, setPendingFavoriteToggles] = useState<Record<string, boolean>>({})
@@ -157,9 +164,8 @@ const HistoryView = ({ onDone }: HistoryViewProps) => {
 		setSelectedItems((prev) => {
 			if (checked) {
 				return [...prev, itemId]
-			} else {
-				return prev.filter((id) => id !== itemId)
 			}
+			return prev.filter((id) => id !== itemId)
 		})
 	}, [])
 
@@ -230,6 +236,18 @@ const HistoryView = ({ onDone }: HistoryViewProps) => {
 		return results
 	}, [tasks, searchQuery, fuse, sortOption])
 
+	// Apply local status/mode filters
+	const filteredSearchResults = useMemo(() => {
+		let results = taskHistorySearchResults
+		if (statusFilter !== "all") {
+			results = results.filter((t: any) => t.status === statusFilter)
+		}
+		if (modeFilter !== "all") {
+			results = results.filter((t: any) => t.mode === modeFilter)
+		}
+		return results
+	}, [taskHistorySearchResults, statusFilter, modeFilter])
+
 	// Group tasks into "Today" and "Older" (only for date-based sorts)
 	const { groupedTasks, groupCounts, groupLabels } = useMemo(() => {
 		const isDateSort = sortOption === "newest" || sortOption === "oldest"
@@ -237,8 +255,8 @@ const HistoryView = ({ onDone }: HistoryViewProps) => {
 		if (!isDateSort) {
 			// No grouping for non-date sorts
 			return {
-				groupedTasks: taskHistorySearchResults,
-				groupCounts: [taskHistorySearchResults.length],
+				groupedTasks: filteredSearchResults,
+				groupCounts: [filteredSearchResults.length],
 				groupLabels: [] as string[],
 			}
 		}
@@ -246,7 +264,7 @@ const HistoryView = ({ onDone }: HistoryViewProps) => {
 		const todayTasks: any[] = []
 		const olderTasks: any[] = []
 
-		taskHistorySearchResults.forEach((task) => {
+		filteredSearchResults.forEach((task) => {
 			if (isToday(task.ts)) {
 				todayTasks.push(task)
 			} else {
@@ -267,7 +285,7 @@ const HistoryView = ({ onDone }: HistoryViewProps) => {
 			groupCounts: groups.map((g) => g.tasks.length),
 			groupLabels: groups.map((g) => g.label),
 		}
-	}, [taskHistorySearchResults, sortOption])
+	}, [filteredSearchResults, sortOption])
 
 	// Calculate total size of selected items
 	const selectedItemsSize = useMemo(() => {
@@ -345,6 +363,16 @@ const HistoryView = ({ onDone }: HistoryViewProps) => {
 								setShowCurrentWorkspaceOnly(!showCurrentWorkspaceOnly)
 							} else if (value === "favoritesOnly") {
 								setShowFavoritesOnly(!showFavoritesOnly)
+							} else if (value === "statusCompleted") {
+								setStatusFilter((prev) => (prev === "completed" ? "all" : "completed"))
+							} else if (value === "statusError") {
+								setStatusFilter((prev) => (prev === "error" ? "all" : "error"))
+							} else if (value === "statusInProgress") {
+								setStatusFilter((prev) => (prev === "in_progress" ? "all" : "in_progress"))
+							} else if (value === "modePlan") {
+								setModeFilter((prev) => (prev === "plan" ? "all" : "plan"))
+							} else if (value === "modeAct") {
+								setModeFilter((prev) => (prev === "act" ? "all" : "act"))
 							}
 						}}
 						value={sortOption}>
@@ -356,14 +384,32 @@ const HistoryView = ({ onDone }: HistoryViewProps) => {
 								const isSortOption = ["newest", "oldest", "mostExpensive", "mostTokens", "mostRelevant"].includes(
 									key,
 								)
-								const isFilterOption = ["workspaceOnly", "favoritesOnly"].includes(key)
+								const isFilterOption = [
+									"workspaceOnly",
+									"favoritesOnly",
+									"statusCompleted",
+									"statusError",
+									"statusInProgress",
+									"modePlan",
+									"modeAct",
+								].includes(key)
 								const isSelected = isSortOption
 									? sortOption === key
 									: key === "workspaceOnly"
 										? showCurrentWorkspaceOnly
 										: key === "favoritesOnly"
 											? showFavoritesOnly
-											: false
+											: key === "statusCompleted"
+												? statusFilter === "completed"
+												: key === "statusError"
+													? statusFilter === "error"
+													: key === "statusInProgress"
+														? statusFilter === "in_progress"
+														: key === "modePlan"
+															? modeFilter === "plan"
+															: key === "modeAct"
+																? modeFilter === "act"
+																: false
 								const isDisabled = key === "mostRelevant" && !searchQuery
 
 								return (
@@ -460,7 +506,7 @@ const HistoryView = ({ onDone }: HistoryViewProps) => {
 }
 
 // https://gist.github.com/evenfrost/1ba123656ded32fb7a0cd4651efd4db0
-export const highlight = (fuseSearchResult: FuseResult<any>[], highlightClassName: string = "history-item-highlight") => {
+export const highlight = (fuseSearchResult: FuseResult<any>[], highlightClassName = "history-item-highlight") => {
 	const set = (obj: Record<string, any>, path: string, value: any) => {
 		const pathValue = path.split(".")
 		let i: number

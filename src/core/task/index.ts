@@ -62,6 +62,7 @@ import { HistoryItem } from "@shared/HistoryItem"
 import { DEFAULT_LANGUAGE_SETTINGS, getLanguageKey, LanguageDisplay } from "@shared/Languages"
 import { USER_CONTENT_TAGS } from "@shared/messages/constants"
 import { convertClineMessageToProto } from "@shared/proto-conversions/cline-message"
+import { PHASE_LABELS } from "@shared/TaskPhase"
 import { ClineDefaultTool, READ_ONLY_TOOLS } from "@shared/tools"
 import { ClineAskResponse } from "@shared/WebviewMessage"
 import {
@@ -2294,6 +2295,8 @@ export class Task {
 				break
 			}
 			case "tool_use":
+				// Emit phase: executing (tool about to run)
+				await this.say("task_phase", PHASE_LABELS.executing, undefined, undefined, true)
 				// If we have a pending initial commit, we must block unsafe tools until it finishes.
 				// Safe tools (read-only) can run in parallel.
 				if (this.initialCheckpointCommitPromise) {
@@ -2348,6 +2351,9 @@ export class Task {
 		if (this.taskState.abort) {
 			throw new Error("Task instance aborted")
 		}
+
+		// Emit phase: preparing (gathering context, building prompt)
+		await this.say("task_phase", PHASE_LABELS.preparing, undefined, undefined, true)
 
 		// Ensure remote workspace detection completes before streaming begins so
 		// the presentation scheduler uses the correct cadence from the first flush.
@@ -2790,6 +2796,10 @@ export class Task {
 			this.taskState.toolUseIdMap.clear()
 
 			const { toolUseHandler, reasonsHandler } = this.streamHandler.getHandlers()
+
+			// Emit phase: sending (API request dispatched, waiting for first chunk)
+			await this.say("task_phase", PHASE_LABELS.sending, undefined, undefined, true)
+
 			const stream = this.attemptApiRequest(previousApiReqIndex) // yields only if the first chunk is successful, otherwise will allow the user to retry the request (most likely due to rate limit error, which gets thrown on the first chunk)
 
 			let assistantMessageId = ""
@@ -2917,6 +2927,10 @@ export class Task {
 							break
 						}
 						case "text": {
+							// Emit phase: generating (first text content arriving)
+							if (!didScheduleAnyContent || assistantMessage.length === 0) {
+								await this.say("task_phase", PHASE_LABELS.generating, undefined, undefined, true)
+							}
 							// If we have reasoning content, finalize it before processing text (only once)
 							const currentReasoning = reasonsHandler.getCurrentReasoning()
 							if (currentReasoning?.thinking && !didFinalizeReasoningForUi) {

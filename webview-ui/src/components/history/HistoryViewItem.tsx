@@ -138,7 +138,25 @@ const HistoryViewItem = ({
 					}}
 					variant="icon">
 					<div className="flex items-center justify-between w-full">
-						<div className="text-description text-xs uppercase">{formatDate(item.ts)}</div>
+						<div className="flex items-center gap-1.5 text-description text-xs uppercase">
+							{item.status && (
+								<span
+									className={cn("inline-block size-2 rounded-full flex-shrink-0", {
+										"bg-green-500": item.status === "completed",
+										"bg-red-500": item.status === "error",
+										"bg-yellow-500": item.status === "in_progress",
+										"bg-gray-400": item.status === "cancelled",
+									})}
+									title={item.status}
+								/>
+							)}
+							{formatDate(item.ts)}
+							{item.mode && (
+								<span className="text-[10px] px-1 py-0.5 rounded-xs bg-accent/20 normal-case">
+									{item.mode === "plan" ? "Plan" : "Act"}
+								</span>
+							)}
+						</div>
 						<div className="self-end flex items-center text-xs">
 							<span className="text-description">${item.totalCost?.toFixed(4) ?? 0}</span>
 							{expanded ? (
@@ -193,7 +211,18 @@ const HistoryViewItem = ({
 									{item.modelId && (
 										<div className="flex justify-between items-center w-full gap-1 text-xs">
 											<span className="font-medium text-description">Model:</span>
-											<span className="text-description">{item.modelId}</span>
+											<span className="text-description">
+												{item.providerId ? `${item.providerId} / ` : ""}
+												{item.modelId}
+											</span>
+										</div>
+									)}
+									{item.cwd && (
+										<div className="flex justify-between items-center w-full gap-1 text-xs">
+											<span className="font-medium text-description">Directory:</span>
+											<span className="text-description truncate max-w-[200px]" title={item.cwd}>
+												{item.cwd}
+											</span>
 										</div>
 									)}
 

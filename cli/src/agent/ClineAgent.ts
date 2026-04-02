@@ -66,8 +66,43 @@ import { CliContextResult, initializeCliContext } from "../vscode-context.js"
 import { ClineSessionEmitter } from "./ClineSessionEmitter.js"
 import { translateMessage } from "./messageTranslator.js"
 import { handlePermissionResponse } from "./permissionHandler.js"
-import type { ClineAcpSession, ClineAgentOptions, PermissionHandler } from "./public-types.js"
+import type {
+	AcpSessionProcessingStatus,
+	AcpSessionWaitTarget,
+	ClineAcpSession,
+	ClineAgentOptions,
+	PermissionHandler,
+} from "./public-types.js"
 import { AcpSessionStatus } from "./public-types.js"
+
+const ACP_PROGRESS_HEARTBEAT_INTERVAL_MS = 15_000
+const ACP_PROGRESS_STALLED_THRESHOLD_MS = 45_000
+
+type ProcessingStatusSnapshot = {
+	waitingOn: AcpSessionWaitTarget
+	stalled: boolean
+	heartbeatText?: string
+}
+
+export function getProcessingStatusSnapshot(elapsedMs: number, hasActiveToolCall: boolean): ProcessingStatusSnapshot {
+	const waitingOn: AcpSessionWaitTarget = hasActiveToolCall ? "tool" : "model"
+	const subject = waitingOn === "tool" ? "tool output" : "model output"
+	const stalled = elapsedMs >= ACP_PROGRESS_STALLED_THRESHOLD_MS
+	const elapsedSeconds = Math.max(1, Math.floor(elapsedMs / 1000))
+
+	if (elapsedMs < ACP_PROGRESS_HEARTBEAT_INTERVAL_MS) {
+		return { waitingOn, stalled }
+	}
+
+	return {
+		waitingOn,
+		stalled,
+		heartbeatText: stalled
+			? `Still working, but there has been no visible ${subject} for ${elapsedSeconds}s. This may be slow or stuck.`
+			: `Still working... waiting for ${subject} (${elapsedSeconds}s since the last visible update).`,
+	}
+}
+
 import { type AcpSessionState } from "./types.js"
 
 // Map providers to their static model lists and defaults (copied from ModelPicker.tsx)
@@ -122,6 +157,9 @@ export class ClineAgent implements acp.Agent {
 
 	/** Per-session event emitters for session updates */
 	private readonly sessionEmitters: Map<string, ClineSessionEmitter> = new Map()
+
+	/** Tracks the last non-heartbeat ACP update emitted for each session while processing. */
+	private readonly sessionProgressActivity: Map<string, number> = new Map()
 
 	/** Permission handler callback for requesting user permission */
 	private permissionHandler?: PermissionHandler
@@ -477,7 +515,15 @@ export class ClineAgent implements acp.Agent {
 
 		// Mark session as processing and set as current active session
 		sessionState.status = AcpSessionStatus.Processing
-		session.lastActivityAt = Date.now()
+		const promptStartAt = Date.now()
+		session.lastActivityAt = promptStartAt
+		session.processingStatus = {
+			startedAt: promptStartAt,
+			lastVisibleUpdateAt: promptStartAt,
+			stalled: false,
+			waitingOn: "model",
+		}
+		this.sessionProgressActivity.set(params.sessionId, promptStartAt)
 		this.currentActiveSessionId = params.sessionId
 
 		// Clear delta tracking state for new prompt cycle
@@ -497,6 +543,9 @@ export class ClineAgent implements acp.Agent {
 
 		// Track if we've already resolved/rejected (object for pass-by-reference)
 		const promptResolved = { value: false }
+		const heartbeatTimer = setInterval(() => {
+			void this.emitProcessingHeartbeat(params.sessionId)
+		}, ACP_PROGRESS_HEARTBEAT_INTERVAL_MS)
 
 		try {
 			// Extract text content from prompt
@@ -589,6 +638,9 @@ export class ClineAgent implements acp.Agent {
 			}
 			throw error
 		} finally {
+			clearInterval(heartbeatTimer)
+			this.sessionProgressActivity.delete(params.sessionId)
+			session.processingStatus = undefined
 			// Clean up subscriptions
 			for (const cleanup of cleanupFunctions) {
 				try {
@@ -798,6 +850,16 @@ export class ClineAgent implements acp.Agent {
 		// Determine if this is a text-streaming message type that needs delta handling
 		// Note: act_mode_respond is NOT included here because its text content was already
 		// sent via the say: "text" message. Including it would cause duplicate output.
+		// Handle task_phase messages: emit as a lightweight status update
+		// so the Kanban board shows dynamic phase labels (e.g. "Analyzing request...")
+		if (message.type === "say" && message.say === "task_phase" && message.partial && message.text) {
+			await this.emitSessionUpdate(sessionId, {
+				sessionUpdate: "agent_message_chunk",
+				content: { type: "text", text: message.text },
+			})
+			return
+		}
+
 		const isTextStreamingMessage =
 			(message.type === "say" &&
 				(message.say === "text" || message.say === "reasoning" || message.say === "completion_result")) ||
@@ -912,6 +974,7 @@ export class ClineAgent implements acp.Agent {
 
 		if (sessionState) {
 			sessionState.status = AcpSessionStatus.Cancelled
+			session.processingStatus = undefined
 
 			// If we have an active controller task, cancel it
 			const controller = this.#sessionControllers.get(session)
@@ -1064,6 +1127,7 @@ export class ClineAgent implements acp.Agent {
 	 * Consumers (e.g. AcpAgent) subscribe to these events
 	 */
 	private async emitSessionUpdate(sessionId: string, update: acp.SessionUpdate): Promise<void> {
+		this.recordSessionActivity(sessionId)
 		const emitter = this.emitterForSession(sessionId)
 
 		try {
@@ -1072,6 +1136,73 @@ export class ClineAgent implements acp.Agent {
 			Logger.debug("[ClineAgent] Error emitting session update:", error)
 			emitter.emit("error", error instanceof Error ? error : new Error(String(error)))
 		}
+	}
+
+	private recordSessionActivity(sessionId: string): void {
+		const session = this.sessions.get(sessionId)
+		const sessionState = this.sessionStates.get(sessionId)
+		if (session) {
+			session.lastActivityAt = Date.now()
+		}
+
+		this.sessionProgressActivity.set(sessionId, Date.now())
+		if (session && sessionState) {
+			this.syncProcessingStatus(session, sessionState, { markVisibleUpdate: true })
+		}
+	}
+
+	private async emitProcessingHeartbeat(sessionId: string): Promise<void> {
+		const session = this.sessions.get(sessionId)
+		const sessionState = this.sessionStates.get(sessionId)
+
+		if (!session || !sessionState || sessionState.status !== AcpSessionStatus.Processing) {
+			return
+		}
+
+		const lastVisibleUpdateAt = this.sessionProgressActivity.get(sessionId) ?? session.lastActivityAt ?? Date.now()
+		const elapsedMs = Date.now() - lastVisibleUpdateAt
+		const snapshot = getProcessingStatusSnapshot(elapsedMs, Boolean(sessionState.currentToolCallId))
+		this.syncProcessingStatus(session, sessionState, { markVisibleUpdate: false, snapshot })
+
+		if (!snapshot.heartbeatText) {
+			return
+		}
+
+		const emitter = this.emitterForSession(sessionId)
+		try {
+			emitter.emit("agent_message_chunk", {
+				content: { type: "text", text: snapshot.heartbeatText },
+			})
+		} catch (error) {
+			Logger.debug("[ClineAgent] Error emitting processing heartbeat:", error)
+			emitter.emit("error", error instanceof Error ? error : new Error(String(error)))
+		}
+	}
+
+	private syncProcessingStatus(
+		session: ClineAcpSession,
+		sessionState: AcpSessionState,
+		options: { markVisibleUpdate: boolean; snapshot?: ProcessingStatusSnapshot },
+	): void {
+		if (sessionState.status !== AcpSessionStatus.Processing) {
+			session.processingStatus = undefined
+			return
+		}
+
+		const now = Date.now()
+		const current = session.processingStatus
+		const lastVisibleUpdateAt = options.markVisibleUpdate ? now : (current?.lastVisibleUpdateAt ?? now)
+		const snapshot =
+			options.snapshot ?? getProcessingStatusSnapshot(now - lastVisibleUpdateAt, Boolean(sessionState.currentToolCallId))
+
+		const nextStatus: AcpSessionProcessingStatus = {
+			startedAt: current?.startedAt ?? now,
+			lastVisibleUpdateAt,
+			stalled: snapshot.stalled,
+			waitingOn: snapshot.waitingOn,
+		}
+
+		session.processingStatus = nextStatus
 	}
 
 	/**

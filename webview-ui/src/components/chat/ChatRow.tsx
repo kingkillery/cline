@@ -836,7 +836,17 @@ export const ChatRowContent = memo(
 		switch (message.type) {
 			case "say":
 				switch (message.say) {
-					case "api_req_started":
+					case "api_req_started": {
+						// Find latest task_phase label from clineMessages for dynamic status display
+						let currentPhaseLabel: string | undefined
+						for (let i = clineMessages.length - 1; i >= 0; i--) {
+							const msg = clineMessages[i]
+							if (msg.type === "say" && msg.say === "task_phase" && msg.partial === true && msg.text) {
+								currentPhaseLabel = msg.text
+								break
+							}
+							if (msg.type === "ask") break
+						}
 						return (
 							<RequestStartRow
 								apiReqStreamingFailedMessage={apiReqStreamingFailedMessage}
@@ -847,10 +857,12 @@ export const ChatRowContent = memo(
 								isExpanded={isExpanded}
 								message={message}
 								mode={mode}
+								phaseLabel={currentPhaseLabel}
 								reasoningContent={reasoningContent}
 								responseStarted={responseStarted}
 							/>
 						)
+					}
 					case "api_req_finished":
 						return <InvisibleSpacer /> // we should never see this message type
 					case "mcp_server_response":
@@ -872,11 +884,14 @@ export const ChatRowContent = memo(
 								position="bottom-right"
 								ref={contentRef}
 								textToCopy={message.text}>
-								<div className="flex items-center">
+								<div className={cn("flex items-center", { "animate-content-slide-in": isLast })}>
 									<div className={cn("flex-1 min-w-0 pl-1")}>
 										<MarkdownRow markdown={message.text} showCursor={false} />
 									</div>
 								</div>
+								{message.partial === true && (
+									<div className="h-0.5 w-full bg-gradient-to-r from-transparent via-description/30 to-transparent animate-shimmer bg-[length:200%_100%]" />
+								)}
 								{quoteButtonState.visible && (
 									<QuoteButton
 										left={quoteButtonState.left}
@@ -892,19 +907,34 @@ export const ChatRowContent = memo(
 						const hasReasoningText = !!message.text?.trim()
 						// Show feature tips throughout the entire thinking/reasoning phase
 						const showFeatureTip = isReasoningStreaming
+						// Use phase label from task_phase messages when available for synthetic waiting rows.
+						// Synthetic waiting rows have ts === Number.MIN_SAFE_INTEGER and carry the phase label in text.
+						const isSyntheticWaitingRow = message.ts === Number.MIN_SAFE_INTEGER
+						const phaseTitle =
+							isSyntheticWaitingRow && message.text
+								? message.text
+								: isReasoningStreaming
+									? "Thinking..."
+									: "Thinking"
 						return (
 							<div>
 								<ThinkingRow
-									isExpanded={(isReasoningStreaming && hasReasoningText) || isExpanded}
+									isExpanded={
+										(isReasoningStreaming && hasReasoningText && !isSyntheticWaitingRow) || isExpanded
+									}
 									isStreaming={isReasoningStreaming}
 									isVisible={true}
 									onToggle={isReasoningStreaming ? undefined : handleToggle}
-									reasoningContent={message.text}
-									showChevron={!isReasoningStreaming || hasReasoningText}
+									reasoningContent={isSyntheticWaitingRow ? undefined : message.text}
+									showChevron={!isReasoningStreaming || (hasReasoningText && !isSyntheticWaitingRow)}
 									showTitle={true}
-									title={isReasoningStreaming ? "Thinking..." : "Thinking"}
+									title={phaseTitle}
 								/>
-								{isReasoningStreaming && showFeatureTips !== false && <FeatureTip />}
+								{isReasoningStreaming && showFeatureTips !== false && (
+									<div className="plain-hide">
+										<FeatureTip />
+									</div>
+								)}
 							</div>
 						)
 					}

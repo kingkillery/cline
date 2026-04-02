@@ -103,8 +103,13 @@ const AppContent = () => {
 		return onboardingModels ? <OnboardingView onboardingModels={onboardingModels} /> : <WelcomeView />
 	}
 
+	const { plainModeEnabled, animationsEnabled } = useExtensionState()
+
 	return (
-		<div className="flex h-screen w-full flex-col">
+		<div
+			className="flex h-screen w-full flex-col"
+			{...(plainModeEnabled ? { "data-plain-mode": "" } : {})}
+			{...(!animationsEnabled ? { "data-animations-disabled": "" } : {})}>
 			<ClineKanbanLaunchModal onClose={handleCloseKanbanModal} open={showKanbanModal} />
 			{showSettings && <SettingsView onDone={hideSettings} targetSection={settingsTargetSection} />}
 			{showHistory && <HistoryView onDone={hideHistory} />}

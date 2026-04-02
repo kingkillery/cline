@@ -80,6 +80,20 @@ const agentFeatures: FeatureToggle[] = [
 
 const editorFeatures: FeatureToggle[] = [
 	{
+		id: "plain-mode",
+		label: "Plain Mode",
+		description: "Simplify the UI by hiding secondary controls and focusing on the chat interface.",
+		stateKey: "plainModeEnabled",
+		settingKey: "plainModeEnabled",
+	},
+	{
+		id: "animations",
+		label: "Animations",
+		description: "Enable smooth transitions and animations. When off, all animations are instant.",
+		stateKey: "animationsEnabled",
+		settingKey: "animationsEnabled",
+	},
+	{
 		id: "show-feature-tips",
 		label: "Feature Tips",
 		description: "Show rotating tips during the thinking phase to help you discover Cline features.",

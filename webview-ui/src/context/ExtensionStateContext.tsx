@@ -279,6 +279,8 @@ export const ExtensionStateContextProvider: React.FC<{
 		doubleCheckCompletionEnabled: false,
 		lazyTeammateModeEnabled: false,
 		showFeatureTips: true,
+		plainModeEnabled: false,
+		animationsEnabled: true,
 		globalSkillsToggles: {},
 		localSkillsToggles: {},
 

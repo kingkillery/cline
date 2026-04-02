@@ -17,4 +17,7 @@ export type HistoryItem = {
 	checkpointManagerErrorMessage?: string
 
 	modelId?: string
+	providerId?: string
+	mode?: "plan" | "act"
+	status?: "completed" | "error" | "cancelled" | "in_progress"
 }

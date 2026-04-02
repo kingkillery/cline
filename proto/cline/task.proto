@@ -103,6 +103,10 @@ message TaskItem {
   int32 cache_writes = 9;
   int32 cache_reads = 10;
   string model_id = 11;
+  string provider_id = 12;
+  string mode = 13;
+  string status = 14;
+  string cwd = 15;
 }
 
 // Request for ask response operation

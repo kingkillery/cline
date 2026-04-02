@@ -889,6 +889,8 @@ export class Controller {
 		const doubleCheckCompletionEnabled = this.stateManager.getGlobalSettingsKey("doubleCheckCompletionEnabled")
 		const lazyTeammateModeEnabled = this.stateManager.getGlobalSettingsKey("lazyTeammateModeEnabled")
 		const showFeatureTips = this.stateManager.getGlobalSettingsKey("showFeatureTips")
+		const plainModeEnabled = this.stateManager.getGlobalSettingsKey("plainModeEnabled")
+		const animationsEnabled = this.stateManager.getGlobalSettingsKey("animationsEnabled")
 
 		const localClineRulesToggles = this.stateManager.getWorkspaceStateKey("localClineRulesToggles")
 		const localWindsurfRulesToggles = this.stateManager.getWorkspaceStateKey("localWindsurfRulesToggles")
@@ -1001,6 +1003,8 @@ export class Controller {
 			doubleCheckCompletionEnabled,
 			lazyTeammateModeEnabled,
 			showFeatureTips,
+			plainModeEnabled,
+			animationsEnabled,
 			banners,
 			welcomeBanners,
 			openAiCodexIsAuthenticated,
