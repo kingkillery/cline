@@ -1,0 +1,14 @@
+node_modules
+dist
+coverage
+.DS_Store
+test-results
+playwright-report
+.worktrees
+.sentry-artifacts
+.env
+.env.*
+!.env.example
+web-ui/.env
+web-ui/.env.*
+!web-ui/.env.example
