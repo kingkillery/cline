@@ -1,8 +1,7 @@
-import { useState } from "react";
-import { Play, RefreshCw, Pencil } from "lucide-react";
-
-import { Dialog, DialogBody, DialogFooter, DialogHeader } from "@/components/ui/dialog";
+import { Pencil, Play, RefreshCw } from "lucide-react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogBody, DialogFooter, DialogHeader } from "@/components/ui/dialog";
 
 export type RetryMode = "fresh" | "worktree" | "edit";
 
@@ -16,6 +15,13 @@ interface RetryTaskDialogProps {
 export function RetryTaskDialog({ open, onOpenChange, taskPrompt, onRetry }: RetryTaskDialogProps): React.ReactElement {
 	const [isEditing, setIsEditing] = useState(false);
 	const [editedPrompt, setEditedPrompt] = useState(taskPrompt);
+
+	// Sync editedPrompt when the dialog opens with a new taskPrompt
+	useEffect(() => {
+		if (open) {
+			setEditedPrompt(taskPrompt);
+		}
+	}, [open, taskPrompt]);
 
 	const handleOpenChange = (nextOpen: boolean) => {
 		if (!nextOpen) {
@@ -54,10 +60,7 @@ export function RetryTaskDialog({ open, onOpenChange, taskPrompt, onRetry }: Ret
 							variant="default"
 							size="sm"
 							icon={<Play size={14} />}
-							onClick={() => {
-								onRetry("fresh", editedPrompt);
-								handleOpenChange(false);
-							}}
+							onClick={() => onRetry("fresh", editedPrompt)}
 						>
 							Fresh start
 						</Button>
@@ -65,10 +68,7 @@ export function RetryTaskDialog({ open, onOpenChange, taskPrompt, onRetry }: Ret
 							variant="primary"
 							size="sm"
 							icon={<RefreshCw size={14} />}
-							onClick={() => {
-								onRetry("worktree", editedPrompt);
-								handleOpenChange(false);
-							}}
+							onClick={() => onRetry("worktree", editedPrompt)}
 						>
 							On worktree
 						</Button>
@@ -82,16 +82,12 @@ export function RetryTaskDialog({ open, onOpenChange, taskPrompt, onRetry }: Ret
 		<Dialog open={open} onOpenChange={handleOpenChange}>
 			<DialogHeader title="Retry task" />
 			<DialogBody>
-				<p className="text-sm text-text-secondary m-0 mb-4">
-					How do you want to retry this task?
-				</p>
+				<p className="text-sm text-text-secondary m-0 mb-4">How do you want to retry this task?</p>
 				<div className="flex flex-col gap-2">
 					<button
+						type="button"
 						className="flex items-center gap-3 p-3 rounded-md bg-surface-2 hover:bg-surface-3 border border-border cursor-pointer text-left transition-colors"
-						onClick={() => {
-							onRetry("fresh");
-							handleOpenChange(false);
-						}}
+						onClick={() => onRetry("fresh")}
 					>
 						<Play size={16} className="text-status-green shrink-0" />
 						<div>
@@ -102,11 +98,9 @@ export function RetryTaskDialog({ open, onOpenChange, taskPrompt, onRetry }: Ret
 						</div>
 					</button>
 					<button
+						type="button"
 						className="flex items-center gap-3 p-3 rounded-md bg-surface-2 hover:bg-surface-3 border border-border cursor-pointer text-left transition-colors"
-						onClick={() => {
-							onRetry("worktree");
-							handleOpenChange(false);
-						}}
+						onClick={() => onRetry("worktree")}
 					>
 						<RefreshCw size={16} className="text-status-blue shrink-0" />
 						<div>
@@ -117,15 +111,14 @@ export function RetryTaskDialog({ open, onOpenChange, taskPrompt, onRetry }: Ret
 						</div>
 					</button>
 					<button
+						type="button"
 						className="flex items-center gap-3 p-3 rounded-md bg-surface-2 hover:bg-surface-3 border border-border cursor-pointer text-left transition-colors"
 						onClick={() => setIsEditing(true)}
 					>
 						<Pencil size={16} className="text-status-orange shrink-0" />
 						<div>
 							<div className="text-sm font-medium text-text-primary">Edit & retry</div>
-							<div className="text-xs text-text-secondary">
-								Edit the prompt, then choose fresh or worktree
-							</div>
+							<div className="text-xs text-text-secondary">Edit the prompt, then choose fresh or worktree</div>
 						</div>
 					</button>
 				</div>
