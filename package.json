@@ -456,7 +456,7 @@
 			"git add proto/cline/state.proto"
 		],
 		"*": [
-			"biome check --write --staged --no-errors-on-unmatched --files-ignore-unknown=true"
+			"node scripts/run-lint-staged-biome.mjs"
 		]
 	},
 	"devDependencies": {
