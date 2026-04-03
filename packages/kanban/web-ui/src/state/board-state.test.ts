@@ -121,6 +121,29 @@ describe("board dependency state", () => {
 		]);
 	});
 
+	it("stores additive handoff metadata on dependency links", () => {
+		const fixture = createBacklogBoard(["Task A", "Task B"]);
+		const taskA = requireTaskId(fixture.taskIdByPrompt["Task A"], "Task A");
+		const taskB = requireTaskId(fixture.taskIdByPrompt["Task B"], "Task B");
+
+		const linked = addTaskDependency(fixture.board, taskA, taskB, {
+			handoff: {
+				context: "Carry forward the upstream implementation details.",
+				outputExpected: "Ready-to-apply patch summary.",
+				filesLikelyAffected: ["README.md"],
+			},
+		});
+
+		expect(linked.added).toBe(true);
+		expect(linked.dependency).toMatchObject({
+			handoff: {
+				context: "Carry forward the upstream implementation details.",
+				outputExpected: "Ready-to-apply patch summary.",
+				filesLikelyAffected: ["README.md"],
+			},
+		});
+	});
+
 	it("only unlocks backlog cards when a review card is trashed", () => {
 		const fixture = createBacklogBoard(["Task A", "Task B", "Task C"]);
 		const taskA = requireTaskId(fixture.taskIdByPrompt["Task A"], "Task A");
@@ -139,9 +162,9 @@ describe("board dependency state", () => {
 		const moveATrash = trashTaskAndGetReadyLinkedTaskIds(dependencyB.board, taskA);
 		expect(moveATrash.moved).toBe(true);
 		expect(moveATrash.board.dependencies).toHaveLength(1);
-		expect(moveATrash.readyTaskIds).toEqual([taskC]);
+		expect(moveATrash.readyTaskIds).toEqual([]);
 
-		const moveBTrash = trashTaskAndGetReadyLinkedTaskIds(dependencyB.board, taskB);
+		const moveBTrash = trashTaskAndGetReadyLinkedTaskIds(moveATrash.board, taskB);
 		expect(moveBTrash.moved).toBe(true);
 		expect(moveBTrash.readyTaskIds).toEqual([taskC]);
 	});

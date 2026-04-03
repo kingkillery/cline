@@ -91,6 +91,7 @@
     "@clinebot/core": "^0.0.24",
     "@clinebot/llms": "^0.0.24",
     "@clinebot/shared": "^0.0.24",
+    "@factory/cli": "^0.93.0",
     "@modelcontextprotocol/sdk": "^1.27.1",
     "@sentry/node": "^10.45.0",
     "@trpc/client": "^11.11.0",

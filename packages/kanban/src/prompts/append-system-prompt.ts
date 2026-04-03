@@ -135,6 +135,7 @@ If the user asks you to write code, fix a bug, implement a feature, refactor, or
 - Kanban also supports linking tasks. Linking is useful both for parallelization and for dependencies: when work is easy to decompose into multiple pieces that can be done in parallel, link multiple backlog tasks to the same dependency so they all become ready to start once that dependency finishes; when one piece of work depends on another, use links to represent that follow-on dependency. If both linked tasks are in backlog, Kanban preserves the order you pass to the command: \`--task-id\` waits on \`--linked-task-id\`, and on the board the arrow points into \`--linked-task-id\`. Once only one linked task remains in backlog, Kanban reorients the saved dependency so the backlog task is the waiting dependent task and the other task is the prerequisite. The board arrow points into the prerequisite task so the user can see what must finish first. A link requires at least one backlog task, and when the linked review task is moved to trash, that backlog task becomes ready to start.
 - How linking works: when a task in the review column is moved to trash, any linked backlog tasks automatically start. This is how you chain work so tasks kick off autonomously without manual intervention.
 - Tasks can also enable automatic review actions: auto-commit, auto-open-pr, or auto-move-to-trash once completed, sending the task to trash and kicking off any linked tasks. Combining auto-review with linking is how you can set up fully autonomous pipelines when the user wants it. For example, enabling auto-commit on each task in a chain: task A finishes, auto-commits and is trashed, task B auto-starts from backlog, auto-commits and is trashed, task C auto-starts, and so on.
+- For multiple connected tasks, prefer the atomic graph command over repeated create/link calls. Use \`task apply-graph\` when you already know the whole task graph.
 - If your current working directory is inside \`.cline/worktrees/\`, you are inside a Kanban task worktree. In that case, create or manage tasks against the main workspace path, not the task worktree path. Pass the main workspace with \`--project-path\`.
 - If a task command fails because the runtime is unavailable, tell the user to start Kanban in that workspace first with \`${kanbanCommand}\`, then retry the task command.
 
@@ -212,6 +213,29 @@ Parameters:
 Notes:
 - Provide at least one field to change in addition to \`--task-id\`.
 
+## task apply-graph
+
+Purpose: create multiple backlog tasks and their dependency edges in one atomic operation.
+
+Command:
+\`${kanbanCommand} task apply-graph [--project-path <path>] (--graph-json "<json>" | --graph-base64 <base64>)\`
+
+Parameters:
+- \`--project-path <path>\` optional workspace path. If not already registered in Kanban, it is auto-added for git repos.
+- \`--graph-json "<json>"\` inline task graph payload.
+- \`--graph-base64 <base64>\` base64-encoded JSON graph payload. Prefer this when shell escaping would be awkward.
+
+Graph schema:
+\`{"tasks":[{"clientId":"a","title":"Task A","summary":"Short outcome","prompt":"Task A full prompt"},{"clientId":"b","prompt":"Task B"}],"dependencies":[{"dependentId":"b","prerequisiteId":"a"}],"defaults":{"baseRef":"main"}}\`
+
+Notes:
+- \`tasks\` must contain at least one task.
+- Each task needs a unique \`clientId\` and a \`prompt\`.
+- \`title\` and \`summary\` are optional but preferred when you know them.
+- Dependency edges point from dependent task to prerequisite task.
+- Dependencies can include an optional \`handoff\` object with \`context\`, \`outputExpected\`, \`filesLikelyAffected\`, \`validationGate\`, and \`risksToWatch\`.
+- Use this command whenever you are creating a connected task graph from one user request.
+
 ## task trash
 
 Purpose: move a task or an entire column to \`trash\`, stop active sessions if needed, clean up task worktrees, and auto-start any linked backlog tasks that become ready.
@@ -287,7 +311,8 @@ Parameters:
 # Workflow Notes
 
 - Prefer \`task list\` first when task IDs or dependency IDs are needed.
-- To create multiple linked tasks, create tasks first, then call \`task link\` for each dependency edge.
+- Prefer \`task apply-graph\` over repeated \`task create\` plus \`task link\` when you already know the graph.
+- Fall back to \`task create\` and \`task link\` only for one-off edits or when incrementally adjusting an existing board.
 `;
 }
 

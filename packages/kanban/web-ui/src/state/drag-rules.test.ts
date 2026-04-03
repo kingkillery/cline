@@ -29,10 +29,7 @@ describe("drag rules", () => {
 		).toBe(true);
 	});
 
-	it("allows review to in-progress drops for retry workflows", () => {
-		expect(isCardDropDisabled("in_progress", "review")).toBe(false);
-
-		// Also allowed when a programmatic move is in flight (manual drag still works)
+	it("allows the matching programmatic review to in-progress drop", () => {
 		const move: ProgrammaticCardMoveInFlight = {
 			taskId: "task-1",
 			fromColumnId: "review",
@@ -46,6 +43,15 @@ describe("drag rules", () => {
 				programmaticCardMoveInFlight: move,
 			}),
 		).toBe(false);
+		expect(
+			isCardDropDisabled("in_progress", "review", {
+				activeDragTaskId: "task-1",
+				programmaticCardMoveInFlight: {
+					...move,
+					toColumnId: "review",
+				},
+			}),
+		).toBe(true);
 	});
 
 	it("allows manual trash to review drops", () => {

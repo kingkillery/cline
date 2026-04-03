@@ -16,9 +16,12 @@ import {
 	type TaskAutoReviewMode,
 	type TaskImage,
 } from "@/types";
+import type { RuntimeTaskHandoffPacket } from "@/runtime/types";
 
 export interface TaskDraft {
 	prompt: string;
+	title?: string;
+	summary?: string;
 	startInPlanMode?: boolean;
 	autoReviewEnabled?: boolean;
 	autoReviewMode?: TaskAutoReviewMode;
@@ -100,6 +103,8 @@ function normalizeCard(rawCard: unknown): BoardCard | null {
 	const card = rawCard as {
 		id?: unknown;
 		prompt?: unknown;
+		title?: unknown;
+		summary?: unknown;
 		startInPlanMode?: unknown;
 		autoReviewEnabled?: unknown;
 		autoReviewMode?: unknown;
@@ -122,6 +127,8 @@ function normalizeCard(rawCard: unknown): BoardCard | null {
 	return {
 		id: typeof card.id === "string" && card.id ? card.id : createShortTaskId(createBrowserUuid),
 		prompt,
+		title: typeof card.title === "string" && card.title.trim() ? card.title.trim() : deriveTaskTitle(prompt),
+		summary: typeof card.summary === "string" && card.summary.trim() ? card.summary.trim() : undefined,
 		startInPlanMode: typeof card.startInPlanMode === "boolean" ? card.startInPlanMode : false,
 		autoReviewEnabled: typeof card.autoReviewEnabled === "boolean" ? card.autoReviewEnabled : false,
 		autoReviewMode: resolveTaskAutoReviewMode(
@@ -136,6 +143,46 @@ function normalizeCard(rawCard: unknown): BoardCard | null {
 
 function createDependencyId(): string {
 	return createBrowserUuid().replaceAll("-", "").slice(0, 8);
+}
+
+function deriveTaskTitle(prompt: string): string {
+	const normalized = prompt.trim();
+	if (!normalized) {
+		return "";
+	}
+	const [firstLine] = normalized.split(/\r?\n/, 1);
+	return (firstLine ?? normalized).trim();
+}
+
+function normalizeTaskHandoffPacket(rawHandoff: unknown): RuntimeTaskHandoffPacket | undefined {
+	if (!rawHandoff || typeof rawHandoff !== "object") {
+		return undefined;
+	}
+	const handoff = rawHandoff as {
+		context?: unknown;
+		outputExpected?: unknown;
+		filesLikelyAffected?: unknown;
+		validationGate?: unknown;
+		risksToWatch?: unknown;
+	};
+	const filesLikelyAffected = Array.isArray(handoff.filesLikelyAffected)
+		? handoff.filesLikelyAffected.filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+		: undefined;
+	const risksToWatch = Array.isArray(handoff.risksToWatch)
+		? handoff.risksToWatch.filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+		: undefined;
+	const normalized: RuntimeTaskHandoffPacket = {
+		...(typeof handoff.context === "string" && handoff.context.trim() ? { context: handoff.context.trim() } : {}),
+		...(typeof handoff.outputExpected === "string" && handoff.outputExpected.trim()
+			? { outputExpected: handoff.outputExpected.trim() }
+			: {}),
+		...(filesLikelyAffected && filesLikelyAffected.length > 0 ? { filesLikelyAffected } : {}),
+		...(typeof handoff.validationGate === "string" && handoff.validationGate.trim()
+			? { validationGate: handoff.validationGate.trim() }
+			: {}),
+		...(risksToWatch && risksToWatch.length > 0 ? { risksToWatch } : {}),
+	};
+	return Object.keys(normalized).length > 0 ? normalized : undefined;
 }
 
 function collectTaskIds(columns: BoardColumn[]): Set<string> {
@@ -158,6 +205,7 @@ function normalizeDependency(rawDependency: unknown, taskIds: Set<string>): Boar
 		fromTaskId?: unknown;
 		toTaskId?: unknown;
 		createdAt?: unknown;
+		handoff?: unknown;
 	};
 	const fromTaskId = typeof dependency.fromTaskId === "string" ? dependency.fromTaskId.trim() : "";
 	const toTaskId = typeof dependency.toTaskId === "string" ? dependency.toTaskId.trim() : "";
@@ -173,6 +221,7 @@ function normalizeDependency(rawDependency: unknown, taskIds: Set<string>): Boar
 		fromTaskId,
 		toTaskId,
 		createdAt: typeof dependency.createdAt === "number" ? dependency.createdAt : Date.now(),
+		handoff: normalizeTaskHandoffPacket(dependency.handoff),
 	};
 }
 function removeDependenciesByTaskIds(board: BoardData, taskIds: Set<string>): BoardData {
@@ -269,6 +318,8 @@ export function addTaskToColumnWithResult(
 		columnId,
 		{
 			prompt,
+			title: draft.title,
+			summary: draft.summary,
 			startInPlanMode: draft.startInPlanMode,
 			autoReviewEnabled: draft.autoReviewEnabled,
 			autoReviewMode: draft.autoReviewMode,
@@ -290,8 +341,13 @@ export interface AddTaskDependencyResult {
 	dependency?: BoardDependency;
 }
 
-export function addTaskDependency(board: BoardData, fromTaskId: string, toTaskId: string): AddTaskDependencyResult {
-	return runtimeTaskState.addTaskDependency(board, fromTaskId, toTaskId);
+export function addTaskDependency(
+	board: BoardData,
+	fromTaskId: string,
+	toTaskId: string,
+	options?: { handoff?: RuntimeTaskHandoffPacket },
+): AddTaskDependencyResult {
+	return runtimeTaskState.addTaskDependency(board, fromTaskId, toTaskId, options);
 }
 
 export function canCreateTaskDependency(board: BoardData, fromTaskId: string, toTaskId: string): boolean {
@@ -458,6 +514,8 @@ export function updateTask(board: BoardData, taskId: string, draft: TaskDraft): 
 			return {
 				...card,
 				prompt,
+				title: draft.title?.trim() || deriveTaskTitle(prompt),
+				summary: draft.summary?.trim() || undefined,
 				startInPlanMode: Boolean(draft.startInPlanMode),
 				autoReviewEnabled: Boolean(draft.autoReviewEnabled),
 				autoReviewMode: resolveTaskAutoReviewMode(draft.autoReviewMode ?? DEFAULT_TASK_AUTO_REVIEW_MODE),

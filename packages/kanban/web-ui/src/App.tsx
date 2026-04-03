@@ -8,11 +8,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { notifyError, showAppToast } from "@/components/app-toaster";
 import { CardDetailView } from "@/components/card-detail-view";
 import { ClearTrashDialog } from "@/components/clear-trash-dialog";
-import { RetryTaskDialog } from "@/components/retry-task-dialog";
 import { DebugDialog } from "@/components/debug-dialog";
 import { AgentTerminalPanel } from "@/components/detail-panels/agent-terminal-panel";
 import { GitHistoryView } from "@/components/git-history-view";
 import { KanbanBoard } from "@/components/kanban-board";
+import { KanbanNativeToolPanel } from "@/components/native-tool/kanban-native-tool-panel";
 import { ProjectNavigationPanel } from "@/components/project-navigation-panel";
 import { ResizableBottomPane } from "@/components/resizable-bottom-pane";
 import { RuntimeSettingsDialog, type RuntimeSettingsSection } from "@/components/runtime-settings-dialog";
@@ -84,7 +84,7 @@ export default function App(): ReactElement {
 	const [canPersistWorkspaceState, setCanPersistWorkspaceState] = useState(false);
 	const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 	const [settingsInitialSection, setSettingsInitialSection] = useState<RuntimeSettingsSection | null>(null);
-	const [homeSidebarSection, setHomeSidebarSection] = useState<"projects" | "agent">("projects");
+	const [homeSidebarSection, setHomeSidebarSection] = useState<"projects" | "agent" | "tool">("projects");
 	const [isClearTrashDialogOpen, setIsClearTrashDialogOpen] = useState(false);
 	const [isGitHistoryOpen, setIsGitHistoryOpen] = useState(false);
 	const [pendingTaskStartAfterEditId, setPendingTaskStartAfterEditId] = useState<string | null>(null);
@@ -421,6 +421,19 @@ export default function App(): ReactElement {
 		latestTaskChatMessage,
 		taskChatMessagesByTaskId,
 	});
+	const homeSidebarToolPanel = (
+		<KanbanNativeToolPanel
+			board={board}
+			setBoard={setBoard}
+			setSelectedTaskId={setSelectedTaskId}
+			workspaceId={currentProjectId}
+			branchRef={defaultTaskBranchRef}
+			branchOptions={createTaskBranchOptions}
+			startInPlanMode={newTaskStartInPlanMode}
+			autoReviewEnabled={newTaskAutoReviewEnabled}
+			autoReviewMode={newTaskAutoReviewMode}
+		/>
+	);
 	const { runningShortcutLabel, handleSelectShortcutLabel, handleRunShortcut, handleCreateShortcut } =
 		useShortcutActions({
 			currentProjectId,
@@ -571,9 +584,6 @@ export default function App(): ReactElement {
 		handleSendReviewComments,
 		moveToTrashLoadingById,
 		trashTaskCount,
-		pendingRetryTask,
-		handleRetryTask,
-		handleCancelRetry,
 	} = useBoardInteractions({
 		board,
 		setBoard,
@@ -759,6 +769,8 @@ export default function App(): ReactElement {
 					onActiveSectionChange={setHomeSidebarSection}
 					canShowAgentSection={!hasNoProjects && Boolean(currentProjectId)}
 					agentSectionContent={homeSidebarAgentPanel}
+					canShowToolSection={!hasNoProjects && Boolean(currentProjectId)}
+					toolSectionContent={homeSidebarToolPanel}
 					onSelectProject={(projectId) => {
 						void handleSelectProject(projectId);
 					}}
@@ -1060,16 +1072,6 @@ export default function App(): ReactElement {
 				branchRef={newTaskBranchRef}
 				branchOptions={createTaskBranchOptions}
 				onBranchRefChange={setNewTaskBranchRef}
-			/>
-			<RetryTaskDialog
-				open={pendingRetryTask !== null}
-				onOpenChange={(open) => {
-					if (!open) {
-						handleCancelRetry();
-					}
-				}}
-				taskPrompt={pendingRetryTask?.card.prompt ?? ""}
-				onRetry={handleRetryTask}
 			/>
 			<ClearTrashDialog
 				open={isClearTrashDialogOpen}

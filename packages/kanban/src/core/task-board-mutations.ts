@@ -3,6 +3,7 @@ import type {
 	RuntimeBoardColumnId,
 	RuntimeBoardData,
 	RuntimeBoardDependency,
+	RuntimeTaskHandoffPacket,
 	RuntimeTaskAutoReviewMode,
 	RuntimeTaskImage,
 } from "./api-contract";
@@ -11,6 +12,8 @@ import { createUniqueTaskId } from "./task-id";
 export interface RuntimeCreateTaskInput {
 	taskId?: string;
 	prompt: string;
+	title?: string;
+	summary?: string;
 	startInPlanMode?: boolean;
 	autoReviewEnabled?: boolean;
 	autoReviewMode?: RuntimeTaskAutoReviewMode;
@@ -20,6 +23,8 @@ export interface RuntimeCreateTaskInput {
 
 export interface RuntimeUpdateTaskInput {
 	prompt: string;
+	title?: string;
+	summary?: string;
 	startInPlanMode?: boolean;
 	autoReviewEnabled?: boolean;
 	autoReviewMode?: RuntimeTaskAutoReviewMode;
@@ -37,6 +42,15 @@ function normalizeTaskAutoReviewMode(value: RuntimeTaskAutoReviewMode | null | u
 // Copy image metadata so board tasks do not retain caller-owned array or object references.
 function cloneTaskImages(images?: RuntimeTaskImage[]): RuntimeTaskImage[] | undefined {
 	return images && images.length > 0 ? images.map((image) => ({ ...image })) : undefined;
+}
+
+function deriveTaskTitle(prompt: string): string {
+	const normalized = prompt.trim();
+	if (!normalized) {
+		return "";
+	}
+	const [firstLine] = normalized.split(/\r?\n/, 1);
+	return (firstLine ?? normalized).trim();
 }
 
 export interface RuntimeCreateTaskResult {
@@ -101,6 +115,19 @@ function collectTaskIds(board: RuntimeBoardData): Set<string> {
 
 function createDependencyId(): string {
 	return crypto.randomUUID().replaceAll("-", "").slice(0, 8);
+}
+
+function cloneTaskHandoffPacket(handoff?: RuntimeTaskHandoffPacket): RuntimeTaskHandoffPacket | undefined {
+	if (!handoff) {
+		return undefined;
+	}
+	return {
+		...(handoff.context ? { context: handoff.context } : {}),
+		...(handoff.outputExpected ? { outputExpected: handoff.outputExpected } : {}),
+		...(handoff.filesLikelyAffected ? { filesLikelyAffected: [...handoff.filesLikelyAffected] } : {}),
+		...(handoff.validationGate ? { validationGate: handoff.validationGate } : {}),
+		...(handoff.risksToWatch ? { risksToWatch: [...handoff.risksToWatch] } : {}),
+	};
 }
 
 function createDependencyPairKey(backlogTaskId: string, linkedTaskId: string): string {
@@ -199,6 +226,15 @@ function getLinkedBacklogTaskIdsReadyAfterTaskTrashed(
 		if (getTaskColumnId(board, dependency.fromTaskId) !== "backlog") {
 			continue;
 		}
+		const stillBlockedByOtherDependency = board.dependencies.some(
+			(candidate) =>
+				candidate.fromTaskId === dependency.fromTaskId &&
+				candidate.id !== dependency.id &&
+				candidate.toTaskId !== taskId,
+		);
+		if (stillBlockedByOtherDependency) {
+			continue;
+		}
 		readyTaskIds.add(dependency.fromTaskId);
 	}
 	return [...readyTaskIds];
@@ -234,6 +270,7 @@ export function updateTaskDependencies(board: RuntimeBoardData): RuntimeBoardDat
 			fromTaskId: resolved.backlogTaskId,
 			toTaskId: resolved.linkedTaskId,
 			createdAt: dependency.createdAt,
+			handoff: cloneTaskHandoffPacket(dependency.handoff),
 		});
 	}
 	if (
@@ -245,7 +282,8 @@ export function updateTaskDependencies(board: RuntimeBoardData): RuntimeBoardDat
 				current.id === dependency.id &&
 				current.fromTaskId === dependency.fromTaskId &&
 				current.toTaskId === dependency.toTaskId &&
-				current.createdAt === dependency.createdAt
+				current.createdAt === dependency.createdAt &&
+				JSON.stringify(current.handoff ?? null) === JSON.stringify(dependency.handoff ?? null)
 			);
 		})
 	) {
@@ -280,6 +318,8 @@ export function addTaskToColumn(
 	const task: RuntimeBoardCard = {
 		id: explicitTaskId || createUniqueTaskId(existingIds, randomUuid),
 		prompt,
+		title: input.title?.trim() || deriveTaskTitle(prompt),
+		summary: input.summary?.trim() || undefined,
 		startInPlanMode: Boolean(input.startInPlanMode),
 		autoReviewEnabled: Boolean(input.autoReviewEnabled),
 		autoReviewMode: normalizeTaskAutoReviewMode(input.autoReviewMode),
@@ -326,6 +366,7 @@ export function addTaskDependency(
 	board: RuntimeBoardData,
 	firstTaskId: string,
 	secondTaskId: string,
+	options?: { handoff?: RuntimeTaskHandoffPacket },
 ): RuntimeAddTaskDependencyResult {
 	const normalizedFirstTaskId = firstTaskId.trim();
 	const normalizedSecondTaskId = secondTaskId.trim();
@@ -347,6 +388,7 @@ export function addTaskDependency(
 		fromTaskId: resolved.backlogTaskId,
 		toTaskId: resolved.linkedTaskId,
 		createdAt: Date.now(),
+		handoff: cloneTaskHandoffPacket(options?.handoff),
 	};
 	return {
 		board: {
@@ -593,6 +635,8 @@ export function updateTask(
 			updatedTask = {
 				...card,
 				prompt,
+				title: input.title?.trim() || deriveTaskTitle(prompt),
+				summary: input.summary?.trim() || undefined,
 				startInPlanMode: Boolean(input.startInPlanMode),
 				autoReviewEnabled: Boolean(input.autoReviewEnabled),
 				autoReviewMode: normalizeTaskAutoReviewMode(input.autoReviewMode),

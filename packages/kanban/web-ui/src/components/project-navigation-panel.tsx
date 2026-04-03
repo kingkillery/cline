@@ -1,6 +1,6 @@
 import * as Collapsible from "@radix-ui/react-collapsible";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
-import { ChevronDown, ChevronUp, Ellipsis, Plus } from "lucide-react";
+import { ChevronDown, ChevronUp, Ellipsis, Plus, Workflow } from "lucide-react";
 import { type MouseEvent as ReactMouseEvent, type ReactNode, useCallback, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { ClineIcon } from "@/components/ui/cline-icon";
@@ -77,6 +77,8 @@ export function ProjectNavigationPanel({
 	onActiveSectionChange,
 	canShowAgentSection,
 	agentSectionContent,
+	canShowToolSection,
+	toolSectionContent,
 	onSelectProject,
 	onRemoveProject,
 	onAddProject,
@@ -85,10 +87,12 @@ export function ProjectNavigationPanel({
 	isLoadingProjects?: boolean;
 	currentProjectId: string | null;
 	removingProjectId: string | null;
-	activeSection: "projects" | "agent";
-	onActiveSectionChange: (section: "projects" | "agent") => void;
+	activeSection: "projects" | "agent" | "tool";
+	onActiveSectionChange: (section: "projects" | "agent" | "tool") => void;
 	canShowAgentSection: boolean;
 	agentSectionContent?: ReactNode;
+	canShowToolSection: boolean;
+	toolSectionContent?: ReactNode;
 	onSelectProject: (projectId: string) => void;
 	onRemoveProject: (projectId: string) => Promise<boolean>;
 	onAddProject: () => void;
@@ -262,7 +266,7 @@ export function ProjectNavigationPanel({
 					</div>
 				</div>
 				<div className="mt-2 rounded-md bg-surface-2 p-1">
-					<div className="grid grid-cols-2 gap-1">
+					<div className="grid grid-cols-3 gap-1">
 						<button
 							type="button"
 							onClick={() => onActiveSectionChange("projects")}
@@ -274,6 +278,23 @@ export function ProjectNavigationPanel({
 							)}
 						>
 							Projects
+						</button>
+						<button
+							type="button"
+							onClick={() => onActiveSectionChange("tool")}
+							disabled={!canShowToolSection}
+							className={cn(
+								"cursor-pointer rounded-sm px-2 py-1 text-xs font-medium",
+								activeSection === "tool"
+									? "bg-surface-4 text-text-primary"
+									: "text-text-secondary hover:text-text-primary",
+								!canShowToolSection ? "cursor-not-allowed opacity-50" : null,
+							)}
+						>
+							<div className="inline-flex items-center gap-1">
+								<Workflow size={11} />
+								Tool
+							</div>
 						</button>
 						<button
 							type="button"
@@ -291,6 +312,12 @@ export function ProjectNavigationPanel({
 						</button>
 					</div>
 				</div>
+				{activeSection === "tool" ? (
+					<p className="text-text-tertiary text-xs" style={{ padding: "8px 4px 0" }}>
+						Draft a native task graph, shape blockers, and make handoffs explicit before applying tasks to the
+						board.
+					</p>
+				) : null}
 				{activeSection === "agent" ? (
 					<p className="text-text-tertiary text-xs" style={{ padding: "8px 4px 0" }}>
 						Add tasks, link dependencies, break work down, and manage your board. Try asking to create and link
@@ -345,6 +372,16 @@ export function ProjectNavigationPanel({
 					</div>
 					<ShortcutsCard />
 				</>
+			) : activeSection === "tool" ? (
+				<div className="flex flex-1 min-h-0 flex-col">
+					<div className="flex flex-1 min-h-0 overflow-hidden bg-surface-1 px-2 pb-2 pt-1">
+						{toolSectionContent ?? (
+							<div className="flex w-full items-center justify-center rounded-md border border-border bg-surface-2 px-3 text-center text-sm text-text-secondary">
+								Select a project to use the native tool.
+							</div>
+						)}
+					</div>
+				</div>
 			) : (
 				<div className="flex flex-1 min-h-0 flex-col">
 					<div className="flex flex-1 min-h-0 overflow-hidden bg-surface-1 px-2 pb-2 pt-1">

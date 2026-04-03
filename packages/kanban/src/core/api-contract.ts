@@ -90,6 +90,8 @@ export type RuntimeTaskImage = z.infer<typeof runtimeTaskImageSchema>;
 export const runtimeBoardCardSchema = z.object({
 	id: z.string(),
 	prompt: z.string(),
+	title: z.string().optional(),
+	summary: z.string().optional(),
 	startInPlanMode: z.boolean(),
 	autoReviewEnabled: z.boolean().optional(),
 	autoReviewMode: runtimeTaskAutoReviewModeSchema.optional(),
@@ -107,11 +109,55 @@ export const runtimeBoardColumnSchema = z.object({
 });
 export type RuntimeBoardColumn = z.infer<typeof runtimeBoardColumnSchema>;
 
+export const runtimeTaskHandoffPacketSchema = z.object({
+	context: z.string().optional(),
+	outputExpected: z.string().optional(),
+	filesLikelyAffected: z.array(z.string()).optional(),
+	validationGate: z.string().optional(),
+	risksToWatch: z.array(z.string()).optional(),
+});
+export type RuntimeTaskHandoffPacket = z.infer<typeof runtimeTaskHandoffPacketSchema>;
+
+export const runtimeTaskGraphTaskSchema = z.object({
+	clientId: z.string(),
+	prompt: z.string(),
+	title: z.string().optional(),
+	summary: z.string().optional(),
+	baseRef: z.string().optional(),
+	startInPlanMode: z.boolean().optional(),
+	autoReviewEnabled: z.boolean().optional(),
+	autoReviewMode: runtimeTaskAutoReviewModeSchema.optional(),
+});
+export type RuntimeTaskGraphTask = z.infer<typeof runtimeTaskGraphTaskSchema>;
+
+export const runtimeTaskGraphDependencySchema = z.object({
+	dependentId: z.string(),
+	prerequisiteId: z.string(),
+	handoff: runtimeTaskHandoffPacketSchema.optional(),
+});
+export type RuntimeTaskGraphDependency = z.infer<typeof runtimeTaskGraphDependencySchema>;
+
+export const runtimeTaskGraphDefaultsSchema = z.object({
+	baseRef: z.string().optional(),
+	startInPlanMode: z.boolean().optional(),
+	autoReviewEnabled: z.boolean().optional(),
+	autoReviewMode: runtimeTaskAutoReviewModeSchema.optional(),
+});
+export type RuntimeTaskGraphDefaults = z.infer<typeof runtimeTaskGraphDefaultsSchema>;
+
+export const runtimeTaskGraphSchema = z.object({
+	tasks: z.array(runtimeTaskGraphTaskSchema).min(1),
+	dependencies: z.array(runtimeTaskGraphDependencySchema).default([]),
+	defaults: runtimeTaskGraphDefaultsSchema.optional(),
+});
+export type RuntimeTaskGraph = z.infer<typeof runtimeTaskGraphSchema>;
+
 export const runtimeBoardDependencySchema = z.object({
 	id: z.string(),
 	fromTaskId: z.string(),
 	toTaskId: z.string(),
 	createdAt: z.number(),
+	handoff: runtimeTaskHandoffPacketSchema.optional(),
 });
 export type RuntimeBoardDependency = z.infer<typeof runtimeBoardDependencySchema>;
 

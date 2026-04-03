@@ -99,6 +99,7 @@ describe("ProjectNavigationPanel width persistence", () => {
 					activeSection="projects"
 					onActiveSectionChange={() => {}}
 					canShowAgentSection
+					canShowToolSection
 					onSelectProject={() => {}}
 					onRemoveProject={async () => true}
 					onAddProject={() => {}}
