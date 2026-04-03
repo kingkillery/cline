@@ -3,7 +3,7 @@ import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "n
 import { createServer } from "node:http";
 import { createRequire } from "node:module";
 import { join, resolve } from "node:path";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
@@ -11,9 +11,10 @@ import { createGitTestEnv } from "../utilities/git-env";
 import { createTempDir } from "../utilities/temp-dir";
 
 const requireFromHere = createRequire(import.meta.url);
+const TEST_REPO_ROOT = fileURLToPath(new URL("../../", import.meta.url));
 
 function resolveShutdownIpcHookPath(): string {
-	return resolve(process.cwd(), "test/integration/shutdown-ipc-hook.cjs");
+	return resolve(TEST_REPO_ROOT, "test/integration/shutdown-ipc-hook.cjs");
 }
 
 function resolveTsxLoaderImportSpecifier(): string {
@@ -206,7 +207,7 @@ function spawnSourceCli(
 	args: string[],
 	options: { cwd: string; env: NodeJS.ProcessEnv; stdio?: ChildProcess["stdio"] },
 ) {
-	const cliEntrypoint = resolve(process.cwd(), "src/cli.ts");
+	const cliEntrypoint = resolve(TEST_REPO_ROOT, "src/cli.ts");
 	return spawn(process.execPath, ["--import", resolveTsxLoaderImportSpecifier(), cliEntrypoint, ...args], {
 		cwd: options.cwd,
 		env: options.env,
@@ -271,7 +272,7 @@ describe("source task commands", () => {
 					resolveShutdownIpcHookPath(),
 					"--import",
 					resolveTsxLoaderImportSpecifier(),
-					resolve(process.cwd(), "src/cli.ts"),
+					resolve(TEST_REPO_ROOT, "src/cli.ts"),
 					"--no-open",
 				],
 				{
@@ -361,7 +362,7 @@ describe("source task commands", () => {
 					resolveShutdownIpcHookPath(),
 					"--import",
 					resolveTsxLoaderImportSpecifier(),
-					resolve(process.cwd(), "src/cli.ts"),
+					resolve(TEST_REPO_ROOT, "src/cli.ts"),
 					"--no-open",
 				],
 				{
@@ -427,7 +428,7 @@ describe("source task commands", () => {
 					resolveShutdownIpcHookPath(),
 					"--import",
 					resolveTsxLoaderImportSpecifier(),
-					resolve(process.cwd(), "src/cli.ts"),
+					resolve(TEST_REPO_ROOT, "src/cli.ts"),
 					"--no-open",
 				],
 				{

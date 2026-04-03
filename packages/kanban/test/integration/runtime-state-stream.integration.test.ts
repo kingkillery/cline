@@ -5,7 +5,7 @@ import { realpath } from "node:fs/promises";
 import { createServer } from "node:http";
 import { createRequire } from "node:module";
 import { join, resolve } from "node:path";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { describe, expect, it } from "vitest";
 import { WebSocket } from "ws";
@@ -30,6 +30,7 @@ import { createGitTestEnv } from "../utilities/git-env";
 import { createTempDir } from "../utilities/temp-dir";
 
 const requireFromHere = createRequire(import.meta.url);
+const TEST_REPO_ROOT = fileURLToPath(new URL("../../", import.meta.url));
 
 interface RuntimeStreamClient {
 	socket: WebSocket;
@@ -158,7 +159,7 @@ function commitAll(cwd: string, message: string): string {
 }
 
 function resolveShutdownIpcHookPath(): string {
-	return resolve(process.cwd(), "test/integration/shutdown-ipc-hook.cjs");
+	return resolve(TEST_REPO_ROOT, "test/integration/shutdown-ipc-hook.cjs");
 }
 
 function resolveTsxLoaderImportSpecifier(): string {
@@ -263,7 +264,7 @@ async function startKanbanServer(input: { cwd: string; homeDir: string; port: nu
 	runtimeUrl: string;
 	stop: () => Promise<void>;
 }> {
-	const cliEntrypoint = resolve(process.cwd(), "src/cli.ts");
+	const cliEntrypoint = resolve(TEST_REPO_ROOT, "src/cli.ts");
 	const shutdownIpcHookPath = resolveShutdownIpcHookPath();
 	const tsxLoaderImportSpecifier = resolveTsxLoaderImportSpecifier();
 	const child = spawn(

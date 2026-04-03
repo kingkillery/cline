@@ -631,7 +631,10 @@ async function run(): Promise<void> {
 	await program.parseAsync(argv, { from: "user" });
 	if (!shouldAutoOpenBrowserTabForInvocation(argv)) {
 		await Promise.allSettled([disposeCliTelemetryService(), flushNodeTelemetry()]);
-		process.exit(process.exitCode ?? 0);
+		// Let Node unwind naturally here. Direct process.exit() can crash
+		// source-CLI runs on Windows when the tsx import hook is active.
+		process.exitCode ??= 0;
+		return;
 	}
 }
 
@@ -640,5 +643,5 @@ void run().catch(async (error) => {
 	await Promise.allSettled([disposeCliTelemetryService(), flushNodeTelemetry()]);
 	const message = error instanceof Error ? error.message : String(error);
 	console.error(`Failed to start Kanban: ${message}`);
-	process.exit(1);
+	process.exitCode = 1;
 });

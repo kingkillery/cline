@@ -36,6 +36,10 @@ function runGit(cwd: string, args: string[]): string {
 	return result.stdout.trim();
 }
 
+function normalizeFixtureText(value: string): string {
+	return value.replace(/\r\n/g, "\n");
+}
+
 async function withTemporaryHome<T>(run: () => Promise<T>): Promise<T> {
 	const { path: tempHome, cleanup } = createTempDir("kanban-home-");
 	const previousHome = process.env.HOME;
@@ -364,8 +368,10 @@ describe.sequential("task-worktree integration", () => {
 
 				expect(restored.baseCommit).toBe(createdCommit);
 				expect(runGit(restored.path, ["rev-parse", "HEAD"])).toBe(createdCommit);
-				expect(readFileSync(join(restored.path, "tracked.txt"), "utf8")).toBe("base\nlocal change\n");
-				expect(readFileSync(join(restored.path, "notes.txt"), "utf8")).toBe("untracked\n");
+				expect(normalizeFixtureText(readFileSync(join(restored.path, "tracked.txt"), "utf8"))).toBe(
+					"base\nlocal change\n",
+				);
+				expect(normalizeFixtureText(readFileSync(join(restored.path, "notes.txt"), "utf8"))).toBe("untracked\n");
 				expect(existsSync(patchPath)).toBe(false);
 			} finally {
 				cleanup();

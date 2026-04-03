@@ -4,6 +4,7 @@ import { join } from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
 
+import { buildShellCommandLine } from "../../../src/core/shell";
 import { prepareAgentLaunch } from "../../../src/terminal/agent-session-adapters";
 
 const originalHome = process.env.HOME;
@@ -100,7 +101,7 @@ describe("prepareAgentLaunch hook strategies", () => {
 		expect(appendPromptIndex).toBeGreaterThanOrEqual(0);
 		expect(launch.args[appendPromptIndex + 1]).toContain("Kanban sidebar agent");
 		expect(launch.args[appendPromptIndex + 1]).toContain(
-			"'/usr/local/bin/node' '/Users/example/repo/dist/cli.js' task create",
+			`${buildShellCommandLine("/usr/local/bin/node", ["/Users/example/repo/dist/cli.js"])} task create`,
 		);
 	});
 
@@ -121,7 +122,7 @@ describe("prepareAgentLaunch hook strategies", () => {
 		expect(launch.args[configArgIndex + 1]).toContain("developer_instructions=");
 		expect(launch.args[configArgIndex + 1]).toContain("Kanban sidebar agent");
 		expect(launch.args[configArgIndex + 1]).toContain(
-			"'/usr/local/bin/node' '/Users/example/repo/dist/cli.js' task create",
+			`${buildShellCommandLine("/usr/local/bin/node", ["/Users/example/repo/dist/cli.js"]).replaceAll('"', '\\"')} task create`,
 		);
 	});
 

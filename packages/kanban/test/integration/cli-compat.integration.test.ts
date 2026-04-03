@@ -1,11 +1,12 @@
 import { spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { resolve } from "node:path";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
 const requireFromHere = createRequire(import.meta.url);
+const TEST_REPO_ROOT = fileURLToPath(new URL("../../", import.meta.url));
 
 function resolveTsxLoaderImportSpecifier(): string {
 	return pathToFileURL(requireFromHere.resolve("tsx")).href;
@@ -18,7 +19,7 @@ describe("cli compatibility flags", () => {
 			[
 				"--import",
 				resolveTsxLoaderImportSpecifier(),
-				resolve(process.cwd(), "src/cli.ts"),
+				resolve(TEST_REPO_ROOT, "src/cli.ts"),
 				"--agent",
 				"legacy-alias-value",
 				"--help",

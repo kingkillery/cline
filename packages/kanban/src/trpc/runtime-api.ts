@@ -81,6 +81,18 @@ async function resolveExistingTaskCwdOrEnsure(options: {
 	}
 }
 
+function resolveRuntimeDebugHomePath(): string {
+	const explicitHome = process.env.HOME?.trim();
+	if (explicitHome) {
+		return explicitHome;
+	}
+	const explicitUserProfile = process.env.USERPROFILE?.trim();
+	if (explicitUserProfile) {
+		return explicitUserProfile;
+	}
+	return homedir();
+}
+
 export function createRuntimeApi(deps: CreateRuntimeApiDependencies): RuntimeTrpcContext["runtimeApi"] {
 	const clineProviderService = createClineProviderService();
 	const clineMcpSettingsService = createClineMcpSettingsService();
@@ -89,12 +101,6 @@ export function createRuntimeApi(deps: CreateRuntimeApiDependencies): RuntimeTrp
 			deps.broadcastClineMcpAuthStatusesUpdated?.(statuses);
 		},
 	});
-	const debugResetTargetPaths = [
-		join(homedir(), ".cline", "data"),
-		join(homedir(), ".cline", "kanban"),
-		join(homedir(), ".cline", "worktrees"),
-	] as const;
-
 	const buildConfigResponse = (runtimeConfig: RuntimeConfigState) =>
 		buildRuntimeConfigResponse(runtimeConfig, clineProviderService.getProviderSettingsSummary());
 
@@ -610,6 +616,12 @@ export function createRuntimeApi(deps: CreateRuntimeApiDependencies): RuntimeTrp
 			}
 		},
 		resetAllState: async (_workspaceScope) => {
+			const debugResetHomePath = resolveRuntimeDebugHomePath();
+			const debugResetTargetPaths = [
+				join(debugResetHomePath, ".cline", "data"),
+				join(debugResetHomePath, ".cline", "kanban"),
+				join(debugResetHomePath, ".cline", "worktrees"),
+			] as const;
 			await deps.prepareForStateReset?.();
 			await Promise.all(
 				debugResetTargetPaths.map(async (path) => {

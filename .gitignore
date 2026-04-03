@@ -58,3 +58,4 @@ tui-traces
 tests/**/cache
 .gstack/
 scripts/ralph/runtime/
+cli/.omx/
