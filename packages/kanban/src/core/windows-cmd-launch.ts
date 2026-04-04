@@ -54,6 +54,65 @@ function getWindowsPathExtensions(env: NodeJS.ProcessEnv): string[] {
 	return configured;
 }
 
+/**
+ * Resolve a bare binary name (e.g. "claude") to its full absolute path on Windows
+ * (e.g. "C:\\Users\\prest\\.local\\bin\\claude.exe"). node-pty's CreateProcess does
+ * not perform PATHEXT resolution, so passing a bare name like "claude" fails even
+ * when "claude.exe" is on PATH. This function does the resolution that CreateProcess skips.
+ */
+export function resolveWindowsBinaryFullPath(binary: string, env: NodeJS.ProcessEnv = process.env): string | null {
+	const trimmed = binary.trim();
+	if (!trimmed) {
+		return null;
+	}
+
+	const extension = extname(trimmed);
+	// Already has an extension — check if it's directly accessible or on PATH
+	if (extension) {
+		if (trimmed.includes("\\") || trimmed.includes("/")) {
+			return canAccessPath(trimmed) ? trimmed : null;
+		}
+		const pathEntries = (getWindowsEnvValue(env, "PATH") ?? "")
+			.split(";")
+			.map((entry) => entry.trim())
+			.filter(Boolean);
+		for (const pathEntry of pathEntries) {
+			const candidate = join(pathEntry, trimmed);
+			if (canAccessPath(candidate)) {
+				return candidate;
+			}
+		}
+		return null;
+	}
+
+	// No extension — scan PATH with PATHEXT candidates
+	const pathExtensions = getWindowsPathExtensions(env);
+	const hasDirectorySeparators = trimmed.includes("\\") || trimmed.includes("/");
+	if (hasDirectorySeparators) {
+		for (const pathExtension of pathExtensions) {
+			const candidate = `${trimmed}${pathExtension}`;
+			if (canAccessPath(candidate)) {
+				return candidate;
+			}
+		}
+		return null;
+	}
+
+	const pathEntries = (getWindowsEnvValue(env, "PATH") ?? "")
+		.split(";")
+		.map((entry) => entry.trim())
+		.filter(Boolean);
+	for (const pathEntry of pathEntries) {
+		for (const pathExtension of pathExtensions) {
+			const candidate = join(pathEntry, `${trimmed}${pathExtension}`);
+			if (canAccessPath(candidate)) {
+				return candidate;
+			}
+		}
+	}
+	return null;
+}
+
 function resolveWindowsBinaryExtension(binary: string, env: NodeJS.ProcessEnv): string | null {
 	const trimmed = binary.trim();
 	if (!trimmed) {

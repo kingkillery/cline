@@ -2,6 +2,7 @@ import * as pty from "node-pty";
 
 import {
 	buildWindowsCmdArgsCommandLine,
+	resolveWindowsBinaryFullPath,
 	resolveWindowsComSpec,
 	shouldUseWindowsCmdLaunch,
 } from "../core/windows-cmd-launch";
@@ -88,7 +89,17 @@ export class PtySession {
 		const terminalName = env?.TERM?.trim() || process.env.TERM?.trim() || "xterm-256color";
 		const launchEnv: NodeJS.ProcessEnv = env ? { ...process.env, ...env } : process.env;
 		const useWindowsShellLaunch = shouldUseWindowsCmdLaunch(binary, process.platform, launchEnv);
-		const spawnBinary = useWindowsShellLaunch ? resolveWindowsComSpec(launchEnv) : binary;
+		let spawnBinary: string;
+		if (useWindowsShellLaunch) {
+			spawnBinary = resolveWindowsComSpec(launchEnv);
+		} else if (process.platform === "win32") {
+			// node-pty uses CreateProcess which does not perform PATHEXT resolution.
+			// A bare name like "claude" fails even when "claude.exe" is on PATH.
+			// Resolve to the full absolute path so CreateProcess can find the binary.
+			spawnBinary = resolveWindowsBinaryFullPath(binary, launchEnv) ?? binary;
+		} else {
+			spawnBinary = binary;
+		}
 		const spawnArgs = useWindowsShellLaunch ? buildWindowsCmdArgsCommandLine(binary, normalizedArgs) : normalizedArgs;
 		const ptyOptions: pty.IPtyForkOptions = {
 			name: terminalName,

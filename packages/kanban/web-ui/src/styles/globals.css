@@ -62,9 +62,14 @@ body,
 	display: flex;
 	flex: 1 1 0;
 	min-height: 0;
-	overflow: hidden;
+	overflow-x: auto;
+	overflow-y: hidden;
 	gap: 8px;
 	padding: 8px;
+}
+
+.kb-board > section {
+	min-width: 200px;
 }
 
 .kb-dependency-surface {

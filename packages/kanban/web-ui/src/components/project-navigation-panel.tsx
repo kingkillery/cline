@@ -1,7 +1,7 @@
 import * as Collapsible from "@radix-ui/react-collapsible";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { ChevronDown, ChevronUp, Ellipsis, Plus, Workflow } from "lucide-react";
-import { type MouseEvent as ReactMouseEvent, type ReactNode, useCallback, useRef, useState } from "react";
+import { type MouseEvent as ReactMouseEvent, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { ClineIcon } from "@/components/ui/cline-icon";
 import { cn } from "@/components/ui/cn";
@@ -113,6 +113,19 @@ export function ProjectNavigationPanel({
 	const [isDragging, setIsDragging] = useState(false);
 	const dragRef = useRef<{ startX: number; startWidth: number } | null>(null);
 	const previousBodyStyleRef = useRef<{ userSelect: string; cursor: string } | null>(null);
+
+	// Auto-collapse sidebar on narrow viewports so the board stays usable.
+	useEffect(() => {
+		const mql = window.matchMedia("(max-width: 640px)");
+		const handleChange = (e: MediaQueryListEvent | MediaQueryList) => {
+			if (e.matches) {
+				setIsCollapsed(true);
+			}
+		};
+		handleChange(mql);
+		mql.addEventListener("change", handleChange);
+		return () => mql.removeEventListener("change", handleChange);
+	}, []);
 
 	const setSidebarCollapsed = useCallback((collapsed: boolean) => {
 		setIsCollapsed(collapsed);
@@ -326,73 +339,72 @@ export function ProjectNavigationPanel({
 				) : null}
 			</div>
 
-			{activeSection === "projects" ? (
-				<>
-					<div
-						className="flex-1 min-h-0 overflow-y-auto overscroll-contain flex flex-col gap-1"
-						style={{ padding: "4px 12px" }}
-					>
-						{sortedProjects.length === 0 && isLoadingProjects ? (
-							<div style={{ padding: "4px 0" }}>
-								{Array.from({ length: 3 }).map((_, index) => (
-									<ProjectRowSkeleton key={`project-skeleton-${index}`} />
-								))}
-							</div>
-						) : null}
+			{/* Use CSS-based show/hide instead of conditional mount/unmount.
+			   This prevents the agent terminal's persistent DOM from corrupting
+			   the projects section when switching sidebar tabs. */}
+			<div className={cn("flex-col", activeSection === "projects" ? "flex flex-1 min-h-0" : "hidden")}>
+				<div
+					className="flex-1 min-h-0 overflow-y-auto overscroll-contain flex flex-col gap-1"
+					style={{ padding: "4px 12px" }}
+				>
+					{sortedProjects.length === 0 && isLoadingProjects ? (
+						<div style={{ padding: "4px 0" }}>
+							{Array.from({ length: 3 }).map((_, index) => (
+								<ProjectRowSkeleton key={`project-skeleton-${index}`} />
+							))}
+						</div>
+					) : null}
 
-						{sortedProjects.map((project) => (
-							<ProjectRow
-								key={project.id}
-								project={project}
-								isCurrent={currentProjectId === project.id}
-								removingProjectId={removingProjectId}
-								onSelect={onSelectProject}
-								onRemove={(projectId) => {
-									const found = sortedProjects.find((item) => item.id === projectId);
-									if (!found) {
-										return;
-									}
-									setPendingProjectRemoval(found);
-								}}
-							/>
-						))}
+					{sortedProjects.map((project) => (
+						<ProjectRow
+							key={project.id}
+							project={project}
+							isCurrent={currentProjectId === project.id}
+							removingProjectId={removingProjectId}
+							onSelect={onSelectProject}
+							onRemove={(projectId) => {
+								const found = sortedProjects.find((item) => item.id === projectId);
+								if (!found) {
+									return;
+								}
+								setPendingProjectRemoval(found);
+							}}
+						/>
+					))}
 
-						{!isLoadingProjects ? (
-							<button
-								type="button"
-								className="kb-project-row flex cursor-pointer items-center gap-1.5 rounded-md text-text-secondary hover:text-text-primary"
-								style={{ padding: "6px 8px" }}
-								onClick={onAddProject}
-								disabled={removingProjectId !== null}
-							>
-								<Plus size={14} className="shrink-0" />
-								<span className="text-sm">Add Project</span>
-							</button>
-						) : null}
-					</div>
-					<ShortcutsCard />
-				</>
-			) : activeSection === "tool" ? (
-				<div className="flex flex-1 min-h-0 flex-col">
-					<div className="flex flex-1 min-h-0 overflow-hidden bg-surface-1 px-2 pb-2 pt-1">
-						{toolSectionContent ?? (
-							<div className="flex w-full items-center justify-center rounded-md border border-border bg-surface-2 px-3 text-center text-sm text-text-secondary">
-								Select a project to use the native tool.
-							</div>
-						)}
-					</div>
+					{!isLoadingProjects ? (
+						<button
+							type="button"
+							className="kb-project-row flex cursor-pointer items-center gap-1.5 rounded-md text-text-secondary hover:text-text-primary"
+							style={{ padding: "6px 8px" }}
+							onClick={onAddProject}
+							disabled={removingProjectId !== null}
+						>
+							<Plus size={14} className="shrink-0" />
+							<span className="text-sm">Add Project</span>
+						</button>
+					) : null}
 				</div>
-			) : (
-				<div className="flex flex-1 min-h-0 flex-col">
-					<div className="flex flex-1 min-h-0 overflow-hidden bg-surface-1 px-2 pb-2 pt-1">
-						{agentSectionContent ?? (
-							<div className="flex w-full items-center justify-center rounded-md border border-border bg-surface-2 px-3 text-center text-sm text-text-secondary">
-								Select a project to use the agent.
-							</div>
-						)}
-					</div>
+				<ShortcutsCard />
+			</div>
+			<div className={cn("flex-col", activeSection === "tool" ? "flex flex-1 min-h-0" : "hidden")}>
+				<div className="flex flex-1 min-h-0 overflow-hidden bg-surface-1 px-2 pb-2 pt-1">
+					{toolSectionContent ?? (
+						<div className="flex w-full items-center justify-center rounded-md border border-border bg-surface-2 px-3 text-center text-sm text-text-secondary">
+							Select a project to use the native tool.
+						</div>
+					)}
 				</div>
-			)}
+			</div>
+			<div className={cn("flex-col", activeSection === "agent" ? "flex flex-1 min-h-0" : "hidden")}>
+				<div className="flex flex-1 min-h-0 overflow-hidden bg-surface-1 px-2 pb-2 pt-1">
+					{agentSectionContent ?? (
+						<div className="flex w-full items-center justify-center rounded-md border border-border bg-surface-2 px-3 text-center text-sm text-text-secondary">
+							Select a project to use the agent.
+						</div>
+					)}
+				</div>
+			</div>
 			<AlertDialog
 				open={pendingProjectRemoval !== null}
 				onOpenChange={(open) => {

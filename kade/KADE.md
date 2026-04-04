@@ -8,6 +8,13 @@ Improve streaming and user feedback in the Kanban flow so users can quickly tell
 
 ## Handoff Log
 
+2026-04-03T22:55:00-06:00 - QA tested embedded Kanban board (v0.1.57)
+Changed: Full QA test of the Kanban web UI at localhost:3484. Found 6 issues (1 critical, 1 high, 2 medium, 2 low). No fixes applied (all deferred for source investigation).
+Files: packages/kanban/.gstack/qa-reports/qa-report-127-0-0-1-3484-2026-04-03.md, packages/kanban/.gstack/qa-reports/baseline.json
+Why: User requested full QA exploration of the kanban package embedded in pk-cline.
+Verified: Board loads, task creation works, settings panel works, keyboard shortcuts work, console clean (no JS errors).
+Next: Fix ISSUE-001 (mobile layout broken) and ISSUE-002 (sidebar state lost after Kanban Agent toggle). These are the highest-impact bugs.
+
 2026-04-02T07:30:00+00:00 - Discovered Kanban UI features need to be built in kanban repo, not pk-cline
 Changed: Investigated the Kanban board architecture. The Kanban web UI is a separate package (github.com/cline/kanban) that orchestrates agent CLIs as subprocesses. Our pk-cline changes only affect the Cline VS Code extension webview and CLI agent, NOT the Kanban web UI. The "no output" issue in Kanban is a kanban package bug. Cloned kanban repo to C:\Dev\Desktop-Projects\kanban for next session.
 Files: (no code changes, investigation only)
