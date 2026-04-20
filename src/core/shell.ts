@@ -26,13 +26,22 @@ export function resolveInteractiveShellCommand(): { binary: string; args: string
 	};
 }
 
-export function quoteShellArg(value: string): string {
-	if (process.platform === "win32") {
+export type ShellQuoteStyle = "posix" | "windows";
+
+function normalizeShellQuoteStyle(style?: ShellQuoteStyle): ShellQuoteStyle {
+	if (style) {
+		return style;
+	}
+	return process.platform === "win32" ? "windows" : "posix";
+}
+
+export function quoteShellArg(value: string, style?: ShellQuoteStyle): string {
+	if (normalizeShellQuoteStyle(style) === "windows") {
 		return `"${value.replaceAll('"', '""')}"`;
 	}
 	return `'${value.replaceAll("'", "'\\''")}'`;
 }
 
-export function buildShellCommandLine(binary: string, args: string[]): string {
-	return [binary, ...args].map((part) => quoteShellArg(part)).join(" ");
+export function buildShellCommandLine(binary: string, args: string[], style?: ShellQuoteStyle): string {
+	return [binary, ...args].map((part) => quoteShellArg(part, style)).join(" ");
 }

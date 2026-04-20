@@ -68,10 +68,11 @@ function writeFakeCommand(binDir: string, command: string): void {
 describe.sequential("runtime-config auto agent selection", () => {
 	it("selects agents using the configured priority order", () => {
 		expect(pickBestInstalledAgentIdFromDetected(["codex", "opencode", "gemini"])).toBe("codex");
+		expect(pickBestInstalledAgentIdFromDetected(["copilot", "opencode", "gemini"])).toBe("copilot");
 		expect(pickBestInstalledAgentIdFromDetected(["opencode", "droid", "gemini"])).toBeNull();
 		expect(pickBestInstalledAgentIdFromDetected(["droid", "gemini", "cline"])).toBeNull();
 		expect(pickBestInstalledAgentIdFromDetected(["gemini", "cline"])).toBeNull();
-		expect(pickBestInstalledAgentIdFromDetected(["claude", "codex", "cline"])).toBe("claude");
+		expect(pickBestInstalledAgentIdFromDetected(["claude", "codex", "copilot", "cline"])).toBe("claude");
 		expect(pickBestInstalledAgentIdFromDetected(["cline"])).toBeNull();
 		expect(pickBestInstalledAgentIdFromDetected([])).toBeNull();
 	});
@@ -86,7 +87,7 @@ describe.sequential("runtime-config auto agent selection", () => {
 
 		try {
 			writeFakeCommand(tempBin, "opencode");
-			writeFakeCommand(tempBin, "codex");
+			writeFakeCommand(tempBin, "copilot");
 			writeFakeCommand(tempBin, "gemini");
 
 			const previousShell = process.env.SHELL;
@@ -95,7 +96,7 @@ describe.sequential("runtime-config auto agent selection", () => {
 				const isolatedPath = `${tempBin}${delimiter}/usr/bin${delimiter}/bin`;
 				await withTemporaryEnv({ home: tempHome, pathPrefix: isolatedPath, replacePath: true }, async () => {
 					const state = await loadRuntimeConfig(tempProject);
-					expect(state.selectedAgentId).toBe("codex");
+					expect(state.selectedAgentId).toBe("copilot");
 					const persisted = JSON.parse(
 						readFileSync(join(tempHome, ".cline", "kanban", "config.json"), "utf8"),
 					) as {
@@ -105,14 +106,14 @@ describe.sequential("runtime-config auto agent selection", () => {
 						commitPromptTemplate?: string;
 						openPrPromptTemplate?: string;
 					};
-					expect(persisted.selectedAgentId).toBe("codex");
+					expect(persisted.selectedAgentId).toBe("copilot");
 					expect(persisted.agentAutonomousModeEnabled).toBeUndefined();
 					expect(persisted.readyForReviewNotificationsEnabled).toBeUndefined();
 					expect(persisted.commitPromptTemplate).toBeUndefined();
 					expect(persisted.openPrPromptTemplate).toBeUndefined();
 
 					const reloadedState = await loadRuntimeConfig(tempProject);
-					expect(reloadedState.selectedAgentId).toBe("codex");
+					expect(reloadedState.selectedAgentId).toBe("copilot");
 				});
 			} finally {
 				if (previousShell === undefined) {
