@@ -105,7 +105,7 @@ function buildHookCommand(event: RuntimeHookEvent, metadata?: HookCommandMetadat
 	if (metadata?.notificationType) {
 		parts.push("--notification-type", metadata.notificationType);
 	}
-	return parts.map(quoteShellArg).join(" ");
+	return parts.map((part) => quoteShellArg(part)).join(" ");
 }
 
 function buildHooksCommandParts(args: string[]): string[] {
@@ -113,7 +113,9 @@ function buildHooksCommandParts(args: string[]): string[] {
 }
 
 function buildHooksCommand(args: string[]): string {
-	return buildHooksCommandParts(args).map(quoteShellArg).join(" ");
+	return buildHooksCommandParts(args)
+		.map((part) => quoteShellArg(part))
+		.join(" ");
 }
 
 function hasCliOption(args: string[], optionName: string): boolean {
@@ -167,7 +169,7 @@ Write-Output '{"cancel":false}'
 exit 0
 `;
 	}
-	const command = commandParts.map(quoteShellArg).join(" ");
+	const command = commandParts.map((part) => quoteShellArg(part)).join(" ");
 	return `#!/usr/bin/env bash
 INPUT="$(cat || true)"
 printf '%s' "$INPUT" | ${command} >/dev/null 2>&1 || true
@@ -193,7 +195,7 @@ Write-Output '{"cancel":false}'
 exit 0
 `;
 	}
-	const command = commandParts.map(quoteShellArg).join(" ");
+	const command = commandParts.map((part) => quoteShellArg(part)).join(" ");
 	return `#!/usr/bin/env bash
 INPUT="$(cat || true)"
 if printf '%s' "$INPUT" | grep -Eq '"event"[[:space:]]*:[[:space:]]*"user_attention"' &&
@@ -233,9 +235,9 @@ Write-Output '{"cancel":false}'
 exit 0
 `;
 	}
-	const activity = activityCommand.map(quoteShellArg).join(" ");
-	const review = reviewCommand.map(quoteShellArg).join(" ");
-	const inProgress = inProgressCommand.map(quoteShellArg).join(" ");
+	const activity = activityCommand.map((part) => quoteShellArg(part)).join(" ");
+	const review = reviewCommand.map((part) => quoteShellArg(part)).join(" ");
+	const inProgress = inProgressCommand.map((part) => quoteShellArg(part)).join(" ");
 	return `#!/usr/bin/env bash
 INPUT="$(cat || true)"
 printf '%s' "$INPUT" | ${activity} >/dev/null 2>&1 || true
@@ -270,8 +272,8 @@ Write-Output '{"cancel":false}'
 exit 0
 `;
 	}
-	const activity = activityCommand.map(quoteShellArg).join(" ");
-	const inProgress = inProgressCommand.map(quoteShellArg).join(" ");
+	const activity = activityCommand.map((part) => quoteShellArg(part)).join(" ");
+	const inProgress = inProgressCommand.map((part) => quoteShellArg(part)).join(" ");
 	return `#!/usr/bin/env bash
 INPUT="$(cat || true)"
 printf '%s' "$INPUT" | ${activity} >/dev/null 2>&1 || true
