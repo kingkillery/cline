@@ -174,6 +174,35 @@ describe("prepareAgentLaunch hook strategies", () => {
 		expect(getCodexConfigOverrideValues(launch.args, "check_for_update_on_startup")).toEqual(["true"]);
 	});
 
+	it("starts Copilot interactive sessions with the task prompt", async () => {
+		setupTempHome();
+		const launch = await prepareAgentLaunch({
+			taskId: "task-copilot",
+			agentId: "copilot",
+			binary: "copilot",
+			args: [],
+			cwd: "/tmp",
+			prompt: "Implement the requested change",
+		});
+
+		expect(launch.args).toEqual(["--interactive", "Implement the requested change"]);
+	});
+
+	it("starts Copilot plan mode through an interactive /plan command", async () => {
+		setupTempHome();
+		const launch = await prepareAgentLaunch({
+			taskId: "task-copilot-plan",
+			agentId: "copilot",
+			binary: "copilot",
+			args: [],
+			cwd: "/tmp",
+			prompt: "Audit the deployment pipeline",
+			startInPlanMode: true,
+		});
+
+		expect(launch.args).toEqual(["--interactive", "/plan Audit the deployment pipeline"]);
+	});
+
 	it("writes Claude settings with explicit permission hook", async () => {
 		setupTempHome();
 		await prepareAgentLaunch({
@@ -526,6 +555,17 @@ describe("prepareAgentLaunch hook strategies", () => {
 		});
 		expect(codexLaunch.args).toEqual(expect.arrayContaining(["resume", "--last"]));
 
+		const copilotLaunch = await prepareAgentLaunch({
+			taskId: "task-copilot",
+			agentId: "copilot",
+			binary: "copilot",
+			args: [],
+			cwd: "/tmp",
+			prompt: "",
+			resumeFromTrash: true,
+		});
+		expect(copilotLaunch.args).toContain("--continue");
+
 		const claudeLaunch = await prepareAgentLaunch({
 			taskId: "task-claude",
 			agentId: "claude",
@@ -617,6 +657,17 @@ describe("prepareAgentLaunch hook strategies", () => {
 			prompt: "",
 		});
 		expect(codexLaunch.args).toContain("--dangerously-bypass-approvals-and-sandbox");
+
+		const copilotLaunch = await prepareAgentLaunch({
+			taskId: "task-copilot-auto",
+			agentId: "copilot",
+			binary: "copilot",
+			args: [],
+			autonomousModeEnabled: true,
+			cwd: "/tmp",
+			prompt: "",
+		});
+		expect(copilotLaunch.args).toEqual(expect.arrayContaining(["--autopilot", "--yolo"]));
 
 		const geminiLaunch = await prepareAgentLaunch({
 			taskId: "task-gemini-auto",

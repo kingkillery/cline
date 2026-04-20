@@ -827,6 +827,45 @@ const codexAdapter: AgentSessionAdapter = {
 	},
 };
 
+const copilotAdapter: AgentSessionAdapter = {
+	async prepare(input) {
+		const args = [...input.args];
+		const env: Record<string, string | undefined> = {};
+		const appendedSystemPrompt = resolveHomeAgentAppendSystemPrompt(input.taskId);
+		const trimmed = input.prompt.trim();
+
+		if (input.autonomousModeEnabled) {
+			if (!hasCliOption(args, "--autopilot")) {
+				args.push("--autopilot");
+			}
+			if (!hasCliOption(args, "--yolo") && !hasCliOption(args, "--allow-all")) {
+				args.push("--yolo");
+			}
+		}
+
+		if (input.resumeFromTrash && !hasCliOption(args, "--continue") && !hasCliOption(args, "--resume")) {
+			args.push("--continue");
+		}
+
+		if (appendedSystemPrompt) {
+			args.push("--add-dir", input.cwd);
+		}
+
+		if (!hasCliOption(args, "--interactive")) {
+			if (input.startInPlanMode) {
+				args.push("--interactive", trimmed ? `/plan ${trimmed}` : "/plan");
+			} else if (trimmed) {
+				args.push("--interactive", trimmed);
+			}
+		}
+
+		return {
+			args,
+			env,
+		};
+	},
+};
+
 const geminiAdapter: AgentSessionAdapter = {
 	async prepare(input) {
 		const args = [...input.args];
@@ -1455,6 +1494,7 @@ const clineAdapter: AgentSessionAdapter = {
 const ADAPTERS: Record<RuntimeAgentId, AgentSessionAdapter> = {
 	claude: claudeAdapter,
 	codex: codexAdapter,
+	copilot: copilotAdapter,
 	gemini: geminiAdapter,
 	opencode: opencodeAdapter,
 	droid: droidAdapter,

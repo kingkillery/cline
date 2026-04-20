@@ -84,6 +84,16 @@ describe("renderAppendSystemPrompt", () => {
 		expect(rendered).not.toContain("claude mcp add --transport http --scope user linear https://mcp.linear.app/mcp");
 		expect(rendered).not.toContain("droid mcp add linear https://mcp.linear.app/mcp --type http");
 	});
+
+	it("renders Copilot-specific Linear MCP guidance when Copilot is active", () => {
+		const rendered = renderAppendSystemPrompt("kanban", {
+			agentId: "copilot",
+		});
+
+		expect(rendered).toContain("Current home agent: `copilot`");
+		expect(rendered).toContain('copilot mcp add linear --url https://mcp.linear.app/mcp --type http --tools "*"');
+		expect(rendered).not.toContain("codex mcp add linear --url https://mcp.linear.app/mcp");
+	});
 });
 
 describe("resolveHomeAgentAppendSystemPrompt", () => {
@@ -125,12 +135,24 @@ describe("resolveHomeAgentAppendSystemPrompt", () => {
 			currentVersion: "0.1.10",
 			cwd: "/Users/example/repo",
 			execPath: "/usr/local/bin/node",
-			execArgv: [],
 			argv: ["node", "/Users/example/repo/dist/cli.js"],
 			resolveRealPath: (path) => path,
 		});
 		expect(prompt).toContain("Current home agent: `kiro`");
 		expect(prompt).toContain("kiro-cli mcp add --name linear --url https://mcp.linear.app/mcp --scope global");
 		expect(prompt).not.toContain("--scope user");
+	});
+
+	it("returns active-agent guidance for Copilot home sidebar sessions", () => {
+		const prompt = resolveHomeAgentAppendSystemPrompt("__home_agent__:workspace-1:copilot", {
+			currentVersion: "0.1.10",
+			cwd: "/Users/example/repo",
+			execPath: "/usr/local/bin/node",
+			execArgv: [],
+			argv: ["node", "/Users/example/repo/dist/cli.js"],
+			resolveRealPath: (path) => path,
+		});
+		expect(prompt).toContain("Current home agent: `copilot`");
+		expect(prompt).toContain('copilot mcp add linear --url https://mcp.linear.app/mcp --type http --tools "*"');
 	});
 });

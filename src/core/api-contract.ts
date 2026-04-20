@@ -71,7 +71,16 @@ export const runtimeSlashCommandsResponseSchema = z.object({
 });
 export type RuntimeSlashCommandsResponse = z.infer<typeof runtimeSlashCommandsResponseSchema>;
 
-export const runtimeAgentIdSchema = z.enum(["claude", "codex", "gemini", "opencode", "droid", "kiro", "cline"]);
+export const runtimeAgentIdSchema = z.enum([
+	"claude",
+	"codex",
+	"copilot",
+	"gemini",
+	"opencode",
+	"droid",
+	"kiro",
+	"cline",
+]);
 export type RuntimeAgentId = z.infer<typeof runtimeAgentIdSchema>;
 
 export const runtimeBoardColumnIdSchema = z.enum(["backlog", "in_progress", "review", "trash"]);
@@ -126,6 +135,7 @@ export const runtimeBoardCardSchema = z
 		id: z.string(),
 		title: z.string().optional(),
 		prompt: z.string(),
+		summary: z.string().optional(),
 		startInPlanMode: z.boolean(),
 		autoReviewEnabled: z.boolean().optional(),
 		autoReviewMode: runtimeTaskAutoReviewModeSchema.optional(),
@@ -168,11 +178,130 @@ export const runtimeBoardColumnSchema = z.object({
 });
 export type RuntimeBoardColumn = z.infer<typeof runtimeBoardColumnSchema>;
 
+export const runtimeTaskHandoffPacketSchema = z.object({
+	context: z.string().optional(),
+	outputExpected: z.string().optional(),
+	filesLikelyAffected: z.array(z.string()).optional(),
+	validationGate: z.string().optional(),
+	risksToWatch: z.array(z.string()).optional(),
+});
+export type RuntimeTaskHandoffPacket = z.infer<typeof runtimeTaskHandoffPacketSchema>;
+
+export const runtimeTaskGraphTaskSchema = z.object({
+	clientId: z.string().trim().min(1, "Task graph task clientId is required."),
+	prompt: z.string().trim().min(1, "Task graph task prompt is required."),
+	title: z.string().optional(),
+	summary: z.string().optional(),
+	baseRef: z.string().optional(),
+	startInPlanMode: z.boolean().optional(),
+	autoReviewEnabled: z.boolean().optional(),
+	autoReviewMode: runtimeTaskAutoReviewModeSchema.optional(),
+});
+export type RuntimeTaskGraphTask = z.infer<typeof runtimeTaskGraphTaskSchema>;
+
+export const runtimeTaskGraphDependencySchema = z.object({
+	dependentId: z.string().trim().min(1, "Task graph dependency dependentId is required."),
+	prerequisiteId: z.string().trim().min(1, "Task graph dependency prerequisiteId is required."),
+	handoff: runtimeTaskHandoffPacketSchema.optional(),
+});
+export type RuntimeTaskGraphDependency = z.infer<typeof runtimeTaskGraphDependencySchema>;
+
+export const runtimeTaskGraphDefaultsSchema = z.object({
+	baseRef: z.string().optional(),
+	startInPlanMode: z.boolean().optional(),
+	autoReviewEnabled: z.boolean().optional(),
+	autoReviewMode: runtimeTaskAutoReviewModeSchema.optional(),
+});
+export type RuntimeTaskGraphDefaults = z.infer<typeof runtimeTaskGraphDefaultsSchema>;
+
+export function collectRuntimeTaskGraphValidationErrors(graph: {
+	tasks: Array<z.infer<typeof runtimeTaskGraphTaskSchema>>;
+	dependencies: Array<z.infer<typeof runtimeTaskGraphDependencySchema>>;
+}): string[] {
+	const errors: string[] = [];
+	const clientIdSet = new Set<string>();
+
+	for (const task of graph.tasks) {
+		const clientId = task.clientId.trim();
+		if (clientIdSet.has(clientId)) {
+			errors.push(`Task graph contains duplicate clientId "${clientId}".`);
+			continue;
+		}
+		clientIdSet.add(clientId);
+	}
+
+	const dependencyMap = new Map<string, string[]>();
+	for (const task of graph.tasks) {
+		dependencyMap.set(task.clientId, []);
+	}
+
+	for (const dependency of graph.dependencies) {
+		if (!clientIdSet.has(dependency.dependentId) || !clientIdSet.has(dependency.prerequisiteId)) {
+			errors.push(
+				`Dependency references unknown task client IDs: ${dependency.dependentId} -> ${dependency.prerequisiteId}.`,
+			);
+			continue;
+		}
+		if (dependency.dependentId === dependency.prerequisiteId) {
+			errors.push(`Dependency cannot reference the same task twice: ${dependency.dependentId}.`);
+			continue;
+		}
+		dependencyMap.get(dependency.dependentId)?.push(dependency.prerequisiteId);
+	}
+
+	const visited = new Set<string>();
+	const visiting = new Set<string>();
+	const hasCycleFrom = (clientId: string): boolean => {
+		if (visiting.has(clientId)) {
+			return true;
+		}
+		if (visited.has(clientId)) {
+			return false;
+		}
+
+		visiting.add(clientId);
+		for (const dependencyId of dependencyMap.get(clientId) ?? []) {
+			if (hasCycleFrom(dependencyId)) {
+				return true;
+			}
+		}
+		visiting.delete(clientId);
+		visited.add(clientId);
+		return false;
+	};
+
+	for (const task of graph.tasks) {
+		if (hasCycleFrom(task.clientId)) {
+			errors.push("Task graph contains a dependency cycle.");
+			break;
+		}
+	}
+
+	return Array.from(new Set(errors));
+}
+
+export const runtimeTaskGraphSchema = z
+	.object({
+		tasks: z.array(runtimeTaskGraphTaskSchema).min(1),
+		dependencies: z.array(runtimeTaskGraphDependencySchema).default([]),
+		defaults: runtimeTaskGraphDefaultsSchema.optional(),
+	})
+	.superRefine((graph, ctx) => {
+		for (const message of collectRuntimeTaskGraphValidationErrors(graph)) {
+			ctx.addIssue({
+				code: z.ZodIssueCode.custom,
+				message,
+			});
+		}
+	});
+export type RuntimeTaskGraph = z.infer<typeof runtimeTaskGraphSchema>;
+
 export const runtimeBoardDependencySchema = z.object({
 	id: z.string(),
 	fromTaskId: z.string(),
 	toTaskId: z.string(),
 	createdAt: z.number(),
+	handoff: runtimeTaskHandoffPacketSchema.optional(),
 });
 export type RuntimeBoardDependency = z.infer<typeof runtimeBoardDependencySchema>;
 
