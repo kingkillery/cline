@@ -1,8 +1,9 @@
 import * as pty from "node-pty";
 
 import {
-	buildWindowsCmdArgsCommandLine,
+	buildWindowsCmdArgsArray,
 	resolveWindowsComSpec,
+	resolveWindowsDirectLaunchBinary,
 	shouldUseWindowsCmdLaunch,
 } from "../core/windows-cmd-launch";
 
@@ -88,12 +89,17 @@ export class PtySession {
 		const terminalName = env?.TERM?.trim() || process.env.TERM?.trim() || "xterm-256color";
 		const launchEnv: NodeJS.ProcessEnv = env ? { ...process.env, ...env } : process.env;
 		const useWindowsShellLaunch = shouldUseWindowsCmdLaunch(binary, process.platform, launchEnv);
-		const spawnBinary = useWindowsShellLaunch ? resolveWindowsComSpec(launchEnv) : binary;
-		const spawnArgs = useWindowsShellLaunch ? buildWindowsCmdArgsCommandLine(binary, normalizedArgs) : normalizedArgs;
+		const spawnBinary =
+			process.platform === "win32" && !useWindowsShellLaunch
+				? (resolveWindowsDirectLaunchBinary(binary, launchEnv) ?? binary)
+				: useWindowsShellLaunch
+					? resolveWindowsComSpec(launchEnv)
+					: binary;
+		const spawnArgs = useWindowsShellLaunch ? buildWindowsCmdArgsArray(binary, normalizedArgs) : normalizedArgs;
 		const ptyOptions: pty.IPtyForkOptions = {
 			name: terminalName,
 			cwd,
-			env,
+			env: launchEnv,
 			cols,
 			rows,
 			encoding: null,

@@ -813,4 +813,54 @@ describe("useHomeAgentSession", () => {
 		expect(startTaskSessionMutateMock).toHaveBeenCalledTimes(2);
 		expect(stopTaskSessionMutateMock).not.toHaveBeenCalled();
 	});
+
+	it("does not retry the same failed home terminal start on rerender", async () => {
+		let latestSnapshot: HookSnapshot | null = null;
+
+		startTaskSessionMutateMock.mockReset();
+		startTaskSessionMutateMock.mockResolvedValue({
+			ok: false,
+			summary: null,
+			error: 'Failed to launch "claude": File not found: ',
+		});
+
+		await act(async () => {
+			root.render(
+				<HookHarness
+					config={createRuntimeConfig({
+						selectedAgentId: "claude",
+						effectiveCommand: "claude",
+					})}
+					currentProjectId="workspace-1"
+					onSnapshot={(snapshot) => {
+						latestSnapshot = snapshot;
+					}}
+				/>,
+			);
+			await createFlushPromises();
+		});
+
+		expect(requireTaskId(requireSnapshot(latestSnapshot).taskId)).toMatch(/^__home_agent__:workspace-1:claude$/);
+		expect(startTaskSessionMutateMock).toHaveBeenCalledTimes(1);
+		expect(notifyErrorMock).toHaveBeenCalledTimes(1);
+
+		await act(async () => {
+			root.render(
+				<HookHarness
+					config={createRuntimeConfig({
+						selectedAgentId: "claude",
+						effectiveCommand: "claude",
+					})}
+					currentProjectId="workspace-1"
+					onSnapshot={(snapshot) => {
+						latestSnapshot = snapshot;
+					}}
+				/>,
+			);
+			await createFlushPromises();
+		});
+
+		expect(startTaskSessionMutateMock).toHaveBeenCalledTimes(1);
+		expect(notifyErrorMock).toHaveBeenCalledTimes(1);
+	});
 });
