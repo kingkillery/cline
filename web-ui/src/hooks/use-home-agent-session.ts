@@ -120,6 +120,7 @@ export function useHomeAgentSession({
 	const homeDescriptorByWorkspaceRef = useRef(new Map<string, HomeAgentWorkspaceDescriptor>());
 	const desiredTaskIdByWorkspaceRef = useRef(new Map<string, string>());
 	const startedSessionKeysRef = useRef(new Set<string>());
+	const attemptedSessionKeysRef = useRef(new Set<string>());
 	const pendingStartRequestIdsRef = useRef(new Map<string, number>());
 	const previousClineSessionContextVersionByWorkspaceRef = useRef(new Map<string, number>());
 	const nextStartRequestIdRef = useRef(0);
@@ -200,12 +201,12 @@ export function useHomeAgentSession({
 
 			homeDescriptorByWorkspaceRef.current.delete(currentProjectId);
 			desiredTaskIdByWorkspaceRef.current.delete(currentProjectId);
-			startedSessionKeysRef.current.delete(
-				buildHomeAgentSessionKey({
-					workspaceId: currentProjectId,
-					taskId: previousTaskId,
-				}),
-			);
+			const previousSessionKey = buildHomeAgentSessionKey({
+				workspaceId: currentProjectId,
+				taskId: previousTaskId,
+			});
+			startedSessionKeysRef.current.delete(previousSessionKey);
+			attemptedSessionKeysRef.current.delete(previousSessionKey);
 			pruneWorkspaceHomeAgentSessions(setSessionSummaries, currentProjectId, null);
 			void stopHomeAgentSession({
 				workspaceId: currentProjectId,
@@ -226,6 +227,12 @@ export function useHomeAgentSession({
 		}
 
 		startedSessionKeysRef.current.delete(
+			buildHomeAgentSessionKey({
+				workspaceId: currentProjectId,
+				taskId: previousTaskId,
+			}),
+		);
+		attemptedSessionKeysRef.current.delete(
 			buildHomeAgentSessionKey({
 				workspaceId: currentProjectId,
 				taskId: previousTaskId,
@@ -302,10 +309,15 @@ export function useHomeAgentSession({
 			return;
 		}
 
+		if (attemptedSessionKeysRef.current.has(sessionKey)) {
+			return;
+		}
+
 		if (pendingStartRequestIdsRef.current.has(sessionKey)) {
 			return;
 		}
 
+		attemptedSessionKeysRef.current.add(sessionKey);
 		const requestId = nextStartRequestIdRef.current + 1;
 		nextStartRequestIdRef.current = requestId;
 		pendingStartRequestIdsRef.current.set(sessionKey, requestId);
@@ -365,6 +377,7 @@ export function useHomeAgentSession({
 			desiredTaskIdByWorkspaceRef.current.clear();
 			homeDescriptorByWorkspaceRef.current.clear();
 			startedSessionKeysRef.current.clear();
+			attemptedSessionKeysRef.current.clear();
 			pendingStartRequestIdsRef.current.clear();
 			previousClineSessionContextVersionByWorkspaceRef.current.clear();
 		};

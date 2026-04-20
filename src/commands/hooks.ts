@@ -6,7 +6,12 @@ import type { Command } from "commander";
 import type { RuntimeHookEvent, RuntimeTaskHookActivity } from "../core/api-contract";
 import { buildKanbanCommandParts } from "../core/kanban-command";
 import { buildKanbanRuntimeUrl } from "../core/runtime-endpoint";
-import { buildWindowsCmdArgsArray, resolveWindowsComSpec, shouldUseWindowsCmdLaunch } from "../core/windows-cmd-launch";
+import {
+	buildWindowsCmdArgsArray,
+	resolveWindowsComSpec,
+	resolveWindowsDirectLaunchBinary,
+	shouldUseWindowsCmdLaunch,
+} from "../core/windows-cmd-launch";
 import { parseHookRuntimeContextFromEnv } from "../terminal/hook-runtime-context";
 import type { RuntimeAppRouter } from "../trpc/app-router";
 import {
@@ -620,7 +625,7 @@ export function buildCodexWrapperSpawn(
 	const childArgs = buildCodexWrapperChildArgs(agentArgs);
 	if (!shouldUseWindowsCmdLaunch(realBinary, platform, env)) {
 		return {
-			binary: realBinary,
+			binary: platform === "win32" ? (resolveWindowsDirectLaunchBinary(realBinary, env) ?? realBinary) : realBinary,
 			args: childArgs,
 		};
 	}

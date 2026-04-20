@@ -54,7 +54,10 @@ function getWindowsPathExtensions(env: NodeJS.ProcessEnv): string[] {
 	return configured;
 }
 
-function resolveWindowsBinaryExtension(binary: string, env: NodeJS.ProcessEnv): string | null {
+function resolveWindowsBinaryCandidate(
+	binary: string,
+	env: NodeJS.ProcessEnv,
+): { path: string; extension: string } | null {
 	const trimmed = binary.trim();
 	if (!trimmed) {
 		return null;
@@ -62,7 +65,10 @@ function resolveWindowsBinaryExtension(binary: string, env: NodeJS.ProcessEnv): 
 
 	const extension = extname(trimmed);
 	if (extension) {
-		return extension.toLowerCase();
+		return {
+			path: trimmed,
+			extension: extension.toLowerCase(),
+		};
 	}
 
 	const pathExtensions = getWindowsPathExtensions(env);
@@ -71,7 +77,10 @@ function resolveWindowsBinaryExtension(binary: string, env: NodeJS.ProcessEnv): 
 		for (const pathExtension of pathExtensions) {
 			const candidate = `${trimmed}${pathExtension}`;
 			if (canAccessPath(candidate)) {
-				return pathExtension.toLowerCase();
+				return {
+					path: candidate,
+					extension: pathExtension.toLowerCase(),
+				};
 			}
 		}
 		return null;
@@ -89,11 +98,25 @@ function resolveWindowsBinaryExtension(binary: string, env: NodeJS.ProcessEnv): 
 		for (const pathExtension of pathExtensions) {
 			const candidate = join(pathEntry, `${trimmed}${pathExtension}`);
 			if (canAccessPath(candidate)) {
-				return pathExtension.toLowerCase();
+				return {
+					path: candidate,
+					extension: pathExtension.toLowerCase(),
+				};
 			}
 		}
 	}
 	return null;
+}
+
+export function resolveWindowsDirectLaunchBinary(binary: string, env: NodeJS.ProcessEnv = process.env): string | null {
+	const candidate = resolveWindowsBinaryCandidate(binary, env);
+	if (!candidate) {
+		return null;
+	}
+	if (!WINDOWS_DIRECT_EXTENSIONS.has(candidate.extension)) {
+		return null;
+	}
+	return candidate.path;
 }
 
 function normalizeWindowsCmdArgument(value: string): string {
@@ -159,13 +182,5 @@ export function shouldUseWindowsCmdLaunch(
 		return false;
 	}
 
-	const resolvedExtension = resolveWindowsBinaryExtension(binary, env);
-	if (resolvedExtension && WINDOWS_DIRECT_EXTENSIONS.has(resolvedExtension)) {
-		return false;
-	}
-	if (resolvedExtension && WINDOWS_CMD_EXTENSIONS.has(resolvedExtension)) {
-		return true;
-	}
-
-	return true;
+	return resolveWindowsDirectLaunchBinary(binary, env) === null;
 }

@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { shouldUseWindowsCmdLaunch } from "../../../src/core/windows-cmd-launch";
+import { resolveWindowsDirectLaunchBinary, shouldUseWindowsCmdLaunch } from "../../../src/core/windows-cmd-launch";
 
 function createWindowsBinary(directory: string, fileName: string): string {
 	const filePath = join(directory, fileName);
@@ -74,6 +74,20 @@ describe("shouldUseWindowsCmdLaunch", () => {
 				ComSpec: "C:\\Windows\\System32\\cmd.exe",
 			}),
 		).toBe(false);
+	});
+
+	it("resolves a bare binary to its full executable path for direct launch", () => {
+		const tempDirectory = mkdtempSync(join(tmpdir(), "kanban-win-launch-"));
+		tempDirectories.push(tempDirectory);
+		const binaryPath = createWindowsBinary(tempDirectory, "claude.exe");
+
+		expect(
+			resolveWindowsDirectLaunchBinary("claude", {
+				PATH: tempDirectory,
+				PATHEXT: ".com;.exe;.bat;.cmd",
+				ComSpec: "C:\\Windows\\System32\\cmd.exe",
+			}),
+		).toBe(binaryPath);
 	});
 
 	it("returns true when PATH resolves a bare binary to .cmd", () => {
