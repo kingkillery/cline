@@ -3,6 +3,7 @@ import { createShortTaskId } from "@runtime-task-id";
 import * as runtimeTaskState from "@runtime-task-state";
 
 import { createInitialBoardData } from "@/data/board-data";
+import type { RuntimeTaskHandoffPacket } from "@/runtime/types";
 import { isAllowedCrossColumnCardMove, type ProgrammaticCardMoveInFlight } from "@/state/drag-rules";
 import {
 	type BoardCard,
@@ -16,7 +17,6 @@ import {
 	type TaskAutoReviewMode,
 	type TaskImage,
 } from "@/types";
-import type { RuntimeTaskHandoffPacket } from "@/runtime/types";
 
 export interface TaskDraft {
 	prompt: string;
@@ -166,7 +166,9 @@ function normalizeTaskHandoffPacket(rawHandoff: unknown): RuntimeTaskHandoffPack
 		risksToWatch?: unknown;
 	};
 	const filesLikelyAffected = Array.isArray(handoff.filesLikelyAffected)
-		? handoff.filesLikelyAffected.filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+		? handoff.filesLikelyAffected.filter(
+				(value): value is string => typeof value === "string" && value.trim().length > 0,
+			)
 		: undefined;
 	const risksToWatch = Array.isArray(handoff.risksToWatch)
 		? handoff.risksToWatch.filter((value): value is string => typeof value === "string" && value.trim().length > 0)

@@ -1,6 +1,6 @@
 import { applyRuntimeTaskGraphToBoard } from "@runtime-task-graph";
-import type { BoardData, TaskAutoReviewMode } from "@/types";
 import type { RuntimeTaskHandoffPacket } from "@/runtime/types";
+import type { BoardData, TaskAutoReviewMode } from "@/types";
 
 export interface NativeToolComposerInput {
 	goal: string;
@@ -112,7 +112,8 @@ function buildScaffoldedGraph(input: NativeToolComposerInput): NativeToolDraftGr
 	third.handoff = {
 		context: "Summarize what changed and what downstream reviewers or follow-on tasks need to know.",
 		outputExpected: "Verified implementation with clear handoff notes.",
-		validationGate: input.successCondition || "Validation evidence is attached before the task is considered complete.",
+		validationGate:
+			input.successCondition || "Validation evidence is attached before the task is considered complete.",
 	};
 	return {
 		nodes: [first, second, third],

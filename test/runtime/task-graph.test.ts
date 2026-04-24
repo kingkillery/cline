@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { runtimeTaskGraphSchema, type RuntimeBoardData, type RuntimeTaskGraph } from "../../src/core/api-contract";
+import { type RuntimeBoardData, type RuntimeTaskGraph, runtimeTaskGraphSchema } from "../../src/core/api-contract";
 import { applyRuntimeTaskGraphToBoard } from "../../src/core/task-graph";
 
 function createBoard(): RuntimeBoardData {
@@ -125,10 +125,7 @@ describe("applyRuntimeTaskGraphToBoard", () => {
 			return;
 		}
 		expect(parsed.error.issues.map((issue) => issue.message)).toEqual(
-			expect.arrayContaining([
-				"Task graph task clientId is required.",
-				"Task graph task prompt is required.",
-			]),
+			expect.arrayContaining(["Task graph task clientId is required.", "Task graph task prompt is required."]),
 		);
 	});
 });

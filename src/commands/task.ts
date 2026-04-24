@@ -2,15 +2,14 @@ import { createTRPCProxyClient, httpBatchLink } from "@trpc/client";
 import type { Command } from "commander";
 
 import {
-	runtimeTaskGraphSchema,
 	type RuntimeBoardCard,
 	type RuntimeBoardColumnId,
 	type RuntimeBoardDependency,
 	type RuntimeTaskGraph,
 	type RuntimeWorkspaceStateResponse,
+	runtimeTaskGraphSchema,
 } from "../core/api-contract";
 import { buildKanbanRuntimeUrl, getKanbanRuntimeOrigin } from "../core/runtime-endpoint";
-import { applyRuntimeTaskGraphToBoard } from "../core/task-graph";
 import {
 	addTaskDependency,
 	addTaskToColumn,
@@ -22,6 +21,7 @@ import {
 	trashTaskAndGetReadyLinkedTaskIds,
 	updateTask,
 } from "../core/task-board-mutations";
+import { applyRuntimeTaskGraphToBoard } from "../core/task-graph";
 import { resolveProjectInputPath } from "../projects/project-path";
 import { loadWorkspaceContext, mutateWorkspaceState } from "../state/workspace-state";
 import type { RuntimeAppRouter } from "../trpc/app-router";
@@ -603,8 +603,9 @@ async function startTask(input: { cwd: string; taskId: string; projectPath?: str
 		);
 	}
 	if (fromColumnId === "backlog") {
-		const blockerCount = runtimeState.board.dependencies.filter((dependency) => dependency.fromTaskId === input.taskId)
-			.length;
+		const blockerCount = runtimeState.board.dependencies.filter(
+			(dependency) => dependency.fromTaskId === input.taskId,
+		).length;
 		if (blockerCount > 0) {
 			throw new Error(
 				blockerCount === 1

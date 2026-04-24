@@ -1,8 +1,4 @@
-import {
-	collectRuntimeTaskGraphValidationErrors,
-	type RuntimeBoardData,
-	type RuntimeTaskGraph,
-} from "./api-contract";
+import { collectRuntimeTaskGraphValidationErrors, type RuntimeBoardData, type RuntimeTaskGraph } from "./api-contract";
 import { addTaskDependency, addTaskToColumn } from "./task-board-mutations";
 
 export interface RuntimeApplyTaskGraphResult {

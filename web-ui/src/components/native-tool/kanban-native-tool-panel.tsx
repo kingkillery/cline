@@ -8,10 +8,10 @@ import { BranchSelectDropdown, type BranchSelectOption } from "@/components/bran
 import {
 	applyNativeToolDraftGraphToBoard,
 	createNextDraftNodeId,
+	generateNativeToolDraftGraph,
 	type NativeToolComposerInput,
 	type NativeToolDraftGraph,
 	type NativeToolDraftNode,
-	generateNativeToolDraftGraph,
 	validateNativeToolDraftGraph,
 } from "@/components/native-tool/native-tool-graph";
 import { Button } from "@/components/ui/button";
@@ -350,7 +350,9 @@ export function KanbanNativeToolPanel({
 							<div className="relative inline-flex">
 								<select
 									value={defaultAutoReviewMode}
-									onChange={(event) => setDefaultAutoReviewMode(event.currentTarget.value as TaskAutoReviewMode)}
+									onChange={(event) =>
+										setDefaultAutoReviewMode(event.currentTarget.value as TaskAutoReviewMode)
+									}
 									className="h-7 appearance-none rounded-md border border-border-bright bg-surface-2 pl-2 pr-7 text-[12px] text-text-primary"
 								>
 									{AUTO_REVIEW_MODE_OPTIONS.map((option) => (
@@ -359,10 +361,10 @@ export function KanbanNativeToolPanel({
 										</option>
 									))}
 								</select>
-									<GitBranch
-										size={12}
-										className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-text-tertiary"
-									/>
+								<GitBranch
+									size={12}
+									className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-text-tertiary"
+								/>
 							</div>
 						</div>
 						<label
@@ -425,7 +427,9 @@ export function KanbanNativeToolPanel({
 										<div className="flex items-start justify-between gap-2">
 											<div>
 												<div className="text-[12px] font-medium text-text-primary">{node.title}</div>
-												<div className="mt-1 text-[11px] text-text-secondary">{node.outcome || "No outcome yet."}</div>
+												<div className="mt-1 text-[11px] text-text-secondary">
+													{node.outcome || "No outcome yet."}
+												</div>
 											</div>
 											<div className="flex shrink-0 items-center gap-1">
 												{node.dependsOn.length > 0 ? (
@@ -448,7 +452,11 @@ export function KanbanNativeToolPanel({
 											<div className="mt-2 text-[10px] text-text-tertiary">
 												Blocked by{" "}
 												{node.dependsOn
-													.map((dependencyId) => draftGraph.nodes.find((candidate) => candidate.id === dependencyId)?.title ?? "Task")
+													.map(
+														(dependencyId) =>
+															draftGraph.nodes.find((candidate) => candidate.id === dependencyId)
+																?.title ?? "Task",
+													)
 													.join(", ")}
 											</div>
 										) : null}
@@ -490,18 +498,14 @@ export function KanbanNativeToolPanel({
 							<LabeledTextarea
 								label="Implementation notes"
 								value={selectedNode.implementationNotes}
-								onChange={(value) =>
-									updateSelectedNode((node) => ({ ...node, implementationNotes: value }))
-								}
+								onChange={(value) => updateSelectedNode((node) => ({ ...node, implementationNotes: value }))}
 								placeholder="Files, caveats, or repo context to include in the prompt."
 								minRows={3}
 							/>
 							<LabeledTextarea
 								label="Acceptance criteria"
 								value={selectedNode.acceptanceCriteria}
-								onChange={(value) =>
-									updateSelectedNode((node) => ({ ...node, acceptanceCriteria: value }))
-								}
+								onChange={(value) => updateSelectedNode((node) => ({ ...node, acceptanceCriteria: value }))}
 								placeholder="How should completion be verified?"
 								minRows={2}
 							/>
@@ -521,7 +525,9 @@ export function KanbanNativeToolPanel({
 														updateSelectedNode((currentNode) => ({
 															...currentNode,
 															dependsOn: isActive
-																? currentNode.dependsOn.filter((dependencyId) => dependencyId !== node.id)
+																? currentNode.dependsOn.filter(
+																		(dependencyId) => dependencyId !== node.id,
+																	)
 																: [...currentNode.dependsOn, node.id],
 														}))
 													}

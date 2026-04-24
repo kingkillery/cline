@@ -44,12 +44,10 @@ export function useTaskStartActions({
 	const startBacklogTasks = useCallback(
 		(taskIds: string[]) => {
 			const startableTaskIdSet = new Set(getStartableBacklogTaskIds(board));
-			const backlogTaskIds = [...new Set(taskIds.filter((taskId) => taskId.trim().length > 0))].filter(
-				(taskId) => {
-					const selection = findCardSelection(board, taskId);
-					return selection?.column.id === "backlog" && startableTaskIdSet.has(taskId);
-				},
-			);
+			const backlogTaskIds = [...new Set(taskIds.filter((taskId) => taskId.trim().length > 0))].filter((taskId) => {
+				const selection = findCardSelection(board, taskId);
+				return selection?.column.id === "backlog" && startableTaskIdSet.has(taskId);
+			});
 
 			if (backlogTaskIds.length === 0) {
 				return;
