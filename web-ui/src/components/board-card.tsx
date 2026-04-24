@@ -256,6 +256,8 @@ export function BoardCard({
 	const displayPrompt = useMemo(() => {
 		return card.prompt.trim();
 	}, [card.prompt]);
+	const explicitTitle = useMemo(() => card.title?.trim() || "", [card.title]);
+	const explicitSummary = useMemo(() => card.summary?.trim() || "", [card.summary]);
 	const rawSessionActivity = useMemo(() => getCardSessionActivity(sessionSummary), [sessionSummary]);
 	const lastSessionActivityRef = useRef<CardSessionActivity | null>(null);
 	const lastSessionActivityCardIdRef = useRef<string | null>(null);
@@ -268,11 +270,17 @@ export function BoardCard({
 	}
 	const sessionActivity = rawSessionActivity ?? lastSessionActivityRef.current;
 	const displayPromptSplit = useMemo(() => {
-		const fallbackTitle = truncateTaskPromptLabel(card.prompt);
+		const fallbackTitle = explicitTitle || truncateTaskPromptLabel(card.prompt);
 		if (!displayPrompt) {
 			return {
 				title: fallbackTitle,
-				description: "",
+				description: explicitSummary,
+			};
+		}
+		if (explicitTitle || explicitSummary) {
+			return {
+				title: explicitTitle || fallbackTitle,
+				description: explicitSummary,
 			};
 		}
 		if (titleWidth <= 0) {
@@ -289,7 +297,7 @@ export function BoardCard({
 			title: split.title || fallbackTitle,
 			description: split.description,
 		};
-	}, [card.prompt, displayPrompt, titleFont, titleWidth]);
+	}, [card.prompt, displayPrompt, explicitSummary, explicitTitle, titleFont, titleWidth]);
 
 	useLayoutEffect(() => {
 		if (titleRect.width > 0) {

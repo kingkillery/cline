@@ -674,6 +674,19 @@ export function useBoardInteractions({
 			if (!selection || selection.column.id !== "backlog") {
 				return;
 			}
+			const blockerCount = board.dependencies.filter((dependency) => dependency.fromTaskId === taskId).length;
+			if (blockerCount > 0) {
+				showAppToast({
+					intent: "warning",
+					icon: "warning-sign",
+					message:
+						blockerCount === 1
+							? "This task is still blocked by 1 prerequisite."
+							: `This task is still blocked by ${blockerCount} prerequisites.`,
+					timeout: 3000,
+				});
+				return;
+			}
 			maybeRequestNotificationPermissionForTaskStart();
 			void startBacklogTaskWithAnimation(selection.card);
 		},

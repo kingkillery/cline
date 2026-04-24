@@ -63,4 +63,15 @@ describe("getStartableBacklogTaskIds", () => {
 		});
 		expect(getStartableBacklogTaskIds(board)).toEqual([]);
 	});
+
+	it("keeps a backlog task blocked until all prerequisites are cleared", () => {
+		const board = createBoard({
+			backlogCards: [createCard("task-a"), createCard("task-b"), createCard("task-c")],
+			dependencies: [
+				{ id: "dep-1", fromTaskId: "task-a", toTaskId: "task-b", createdAt: 1 },
+				{ id: "dep-2", fromTaskId: "task-a", toTaskId: "task-c", createdAt: 2 },
+			],
+		});
+		expect(getStartableBacklogTaskIds(board)).toEqual(["task-b", "task-c"]);
+	});
 });

@@ -22,31 +22,13 @@ export interface UseTaskStartActionsResult {
 }
 
 export function getStartableBacklogTaskIds(board: BoardData): string[] {
-	const allBacklogTasks = new Set<string>();
-	const allInProgressTasks = new Set<string>();
-	const startableTaskIds: string[] = [];
-
 	const backlogCards = board.columns.find((column) => column.id === "backlog")?.cards;
-	const inProgressTasks = board.columns.find((column) => column.id === "in_progress")?.cards;
-
-	backlogCards?.forEach((card) => {
-		allBacklogTasks.add(card.id);
-	});
-	inProgressTasks?.forEach((card) => {
-		allInProgressTasks.add(card.id);
-	});
-
-	backlogCards?.forEach((card) => {
-		const dependency = board.dependencies.find((d) => d.fromTaskId === card.id);
-		const isChildTaskInBacklog = dependency && allBacklogTasks.has(dependency.toTaskId);
-		const isChildTaskInProgress = dependency && allInProgressTasks.has(dependency.toTaskId);
-
-		if (!isChildTaskInBacklog && !isChildTaskInProgress) {
-			startableTaskIds.push(card.id);
-		}
-	});
-
-	return startableTaskIds;
+	if (!backlogCards || backlogCards.length === 0) {
+		return [];
+	}
+	return backlogCards
+		.filter((card) => !board.dependencies.some((dependency) => dependency.fromTaskId === card.id))
+		.map((card) => card.id);
 }
 
 export function useTaskStartActions({
@@ -61,10 +43,13 @@ export function useTaskStartActions({
 
 	const startBacklogTasks = useCallback(
 		(taskIds: string[]) => {
-			const backlogTaskIds = [...new Set(taskIds.filter((taskId) => taskId.trim().length > 0))].filter((taskId) => {
-				const selection = findCardSelection(board, taskId);
-				return selection?.column.id === "backlog";
-			});
+			const startableTaskIdSet = new Set(getStartableBacklogTaskIds(board));
+			const backlogTaskIds = [...new Set(taskIds.filter((taskId) => taskId.trim().length > 0))].filter(
+				(taskId) => {
+					const selection = findCardSelection(board, taskId);
+					return selection?.column.id === "backlog" && startableTaskIdSet.has(taskId);
+				},
+			);
 
 			if (backlogTaskIds.length === 0) {
 				return;

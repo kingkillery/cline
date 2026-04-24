@@ -404,6 +404,246 @@ describe("source task commands", () => {
 		}
 	});
 
+	it("applies a task graph atomically and lists the created dependencies", { timeout: 60_000 }, async () => {
+		const { path: homeDir, cleanup: cleanupHome } = createTempDir("kanban-home-task-apply-graph-");
+		const { path: projectPath, cleanup: cleanupProject } = createTempDir("kanban-project-task-apply-graph-");
+
+		try {
+			initGitRepository(projectPath);
+			writeFileSync(join(projectPath, "README.md"), "# Task Apply Graph Test\n", "utf8");
+			commitAll(projectPath, "init");
+
+			const port = String(await getAvailablePort());
+			const env = createGitTestEnv({
+				HOME: homeDir,
+				USERPROFILE: homeDir,
+				KANBAN_RUNTIME_PORT: port,
+			});
+
+			const serverProcess = spawn(
+				process.execPath,
+				[
+					"--require",
+					resolveShutdownIpcHookPath(),
+					"--import",
+					resolveTsxLoaderImportSpecifier(),
+					resolve(process.cwd(), "src/cli.ts"),
+					"--no-open",
+				],
+				{
+					cwd: projectPath,
+					env,
+					stdio: ["ignore", "pipe", "pipe", "ipc"],
+				},
+			);
+
+			try {
+				await waitForServerStart(serverProcess);
+
+				const graphPayload = Buffer.from(
+					JSON.stringify({
+						tasks: [
+							{
+								clientId: "map-scope",
+								title: "Map scope",
+								summary: "Understand the current flow.",
+								prompt: "Inspect the current flow and capture the existing constraints.",
+							},
+							{
+								clientId: "ship-change",
+								title: "Ship change",
+								summary: "Implement the requested update.",
+								prompt: "Implement the requested change after the scope work is complete.",
+							},
+						],
+						dependencies: [
+							{
+								dependentId: "ship-change",
+								prerequisiteId: "map-scope",
+								handoff: {
+									context: "Use the scope notes from the first task.",
+									outputExpected: "Working implementation with verification notes.",
+								},
+							},
+						],
+						defaults: {
+							baseRef: "main",
+							startInPlanMode: true,
+						},
+					}),
+					"utf8",
+				).toString("base64");
+
+				const applied = await runCliCommandAndCollectOutput({
+					args: ["task", "apply-graph", "--graph-base64", graphPayload, "--project-path", projectPath],
+					cwd: projectPath,
+					env,
+				});
+				expect(
+					applied.didExit,
+					`task apply-graph did not exit in time.\nstdout:\n${applied.stdout}\nstderr:\n${applied.stderr}`,
+				).toBe(true);
+				expect(applied.exitCode).toBe(0);
+
+				const appliedPayload = JSON.parse(applied.stdout) as {
+					ok?: boolean;
+					createdTasks?: Array<{ id?: string; title?: string | null }>;
+					dependencies?: Array<{ dependentTaskId?: string; prerequisiteTaskId?: string }>;
+					taskIdByClientId?: Record<string, string>;
+				};
+				expect(appliedPayload.ok).toBe(true);
+				expect(appliedPayload.createdTasks).toHaveLength(2);
+				expect(appliedPayload.taskIdByClientId?.["map-scope"]).toBeTruthy();
+				expect(appliedPayload.taskIdByClientId?.["ship-change"]).toBeTruthy();
+				expect(appliedPayload.dependencies).toEqual([
+					expect.objectContaining({
+						dependentTaskId: appliedPayload.taskIdByClientId?.["ship-change"],
+						prerequisiteTaskId: appliedPayload.taskIdByClientId?.["map-scope"],
+					}),
+				]);
+
+				const listed = await runCliCommandAndCollectOutput({
+					args: ["task", "list", "--project-path", projectPath],
+					cwd: projectPath,
+					env,
+				});
+				expect(
+					listed.didExit,
+					`task list did not exit in time.\nstdout:\n${listed.stdout}\nstderr:\n${listed.stderr}`,
+				).toBe(true);
+				expect(listed.exitCode).toBe(0);
+
+				const listedPayload = JSON.parse(listed.stdout) as {
+					ok?: boolean;
+					count?: number;
+					tasks?: Array<{ title?: string | null }>;
+					dependencies?: Array<{ dependentTaskId?: string; prerequisiteTaskId?: string }>;
+				};
+				expect(listedPayload.ok).toBe(true);
+				expect(listedPayload.count).toBe(2);
+				expect(listedPayload.tasks?.map((task) => task.title)).toEqual(["Ship change", "Map scope"]);
+				expect(listedPayload.dependencies).toHaveLength(1);
+			} finally {
+				await requestGracefulShutdown(serverProcess);
+				const stopped = await waitForExit(serverProcess, 5_000);
+				if (!stopped) {
+					serverProcess.kill("SIGKILL");
+					await waitForExit(serverProcess, 5_000);
+				}
+			}
+		} finally {
+			cleanupProject();
+			cleanupHome();
+		}
+	});
+
+	it("rejects invalid task graphs before mutating workspace state", { timeout: 60_000 }, async () => {
+		const { path: homeDir, cleanup: cleanupHome } = createTempDir("kanban-home-task-apply-graph-invalid-");
+		const { path: projectPath, cleanup: cleanupProject } = createTempDir("kanban-project-task-apply-graph-invalid-");
+
+		try {
+			initGitRepository(projectPath);
+			writeFileSync(join(projectPath, "README.md"), "# Invalid Task Apply Graph Test\n", "utf8");
+			commitAll(projectPath, "init");
+
+			const port = String(await getAvailablePort());
+			const env = createGitTestEnv({
+				HOME: homeDir,
+				USERPROFILE: homeDir,
+				KANBAN_RUNTIME_PORT: port,
+			});
+
+			const serverProcess = spawn(
+				process.execPath,
+				[
+					"--require",
+					resolveShutdownIpcHookPath(),
+					"--import",
+					resolveTsxLoaderImportSpecifier(),
+					resolve(process.cwd(), "src/cli.ts"),
+					"--no-open",
+				],
+				{
+					cwd: projectPath,
+					env,
+					stdio: ["ignore", "pipe", "pipe", "ipc"],
+				},
+			);
+
+			try {
+				await waitForServerStart(serverProcess);
+
+				const invalidGraphPayload = Buffer.from(
+					JSON.stringify({
+						tasks: [
+							{ clientId: "task-a", prompt: "Task A" },
+							{ clientId: "task-b", prompt: "Task B" },
+						],
+						dependencies: [
+							{ dependentId: "task-a", prerequisiteId: "task-b" },
+							{ dependentId: "task-b", prerequisiteId: "task-a" },
+						],
+					}),
+					"utf8",
+				).toString("base64");
+
+				const applied = await runCliCommandAndCollectOutput({
+					args: ["task", "apply-graph", "--graph-base64", invalidGraphPayload, "--project-path", projectPath],
+					cwd: projectPath,
+					env,
+				});
+				expect(
+					applied.didExit,
+					`task apply-graph did not exit in time.\nstdout:\n${applied.stdout}\nstderr:\n${applied.stderr}`,
+				).toBe(true);
+				expect(applied.exitCode).toBe(1);
+				expect(applied.stdout).toContain("Task graph contains a dependency cycle.");
+
+				const duplicateClientIdPayload = Buffer.from(
+					JSON.stringify({
+						tasks: [
+							{ clientId: "task-a", prompt: "Task A" },
+							{ clientId: "task-a", prompt: "Task B" },
+						],
+						dependencies: [],
+					}),
+					"utf8",
+				).toString("base64");
+
+				const duplicate = await runCliCommandAndCollectOutput({
+					args: ["task", "apply-graph", "--graph-base64", duplicateClientIdPayload, "--project-path", projectPath],
+					cwd: projectPath,
+					env,
+				});
+				expect(
+					duplicate.didExit,
+					`task apply-graph duplicate-id case did not exit in time.\nstdout:\n${duplicate.stdout}\nstderr:\n${duplicate.stderr}`,
+				).toBe(true);
+				expect(duplicate.exitCode).toBe(1);
+				expect(duplicate.stdout).toContain('Task graph contains duplicate clientId "task-a".');
+
+				const listed = await runCliCommandAndCollectOutput({
+					args: ["task", "list", "--project-path", projectPath],
+					cwd: projectPath,
+					env,
+				});
+				expect(listed.didExit).toBe(true);
+				expect(listed.exitCode).toBe(0);
+				expect(listed.stdout).toContain('"count": 0');
+			} finally {
+				await requestGracefulShutdown(serverProcess);
+				const stopped = await waitForExit(serverProcess, 5_000);
+				if (!stopped) {
+					serverProcess.kill("SIGKILL");
+					await waitForExit(serverProcess, 5_000);
+				}
+			}
+		} finally {
+			cleanupProject();
+			cleanupHome();
+		}
+	});
+
 	it("supports trashing and deleting tasks by column", { timeout: 60_000 }, async () => {
 		const { path: homeDir, cleanup: cleanupHome } = createTempDir("kanban-home-task-trash-delete-");
 		const { path: projectPath, cleanup: cleanupProject } = createTempDir("kanban-project-task-trash-delete-");

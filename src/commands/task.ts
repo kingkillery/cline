@@ -1,13 +1,16 @@
 import { createTRPCProxyClient, httpBatchLink } from "@trpc/client";
 import type { Command } from "commander";
 
-import type {
-	RuntimeBoardCard,
-	RuntimeBoardColumnId,
-	RuntimeBoardDependency,
-	RuntimeWorkspaceStateResponse,
+import {
+	runtimeTaskGraphSchema,
+	type RuntimeBoardCard,
+	type RuntimeBoardColumnId,
+	type RuntimeBoardDependency,
+	type RuntimeTaskGraph,
+	type RuntimeWorkspaceStateResponse,
 } from "../core/api-contract";
 import { buildKanbanRuntimeUrl, getKanbanRuntimeOrigin } from "../core/runtime-endpoint";
+import { applyRuntimeTaskGraphToBoard } from "../core/task-graph";
 import {
 	addTaskDependency,
 	addTaskToColumn,
@@ -193,6 +196,8 @@ function formatTaskRecord(
 	const session = state.sessions[task.id] ?? null;
 	return {
 		id: task.id,
+		title: task.title ?? null,
+		summary: task.summary ?? null,
 		prompt: task.prompt,
 		column: columnId,
 		baseRef: task.baseRef,
@@ -226,7 +231,12 @@ function formatDependencyRecord(
 		backlogTaskColumn: getTaskColumnId(state.board, dependency.fromTaskId),
 		linkedTaskId: dependency.toTaskId,
 		linkedTaskColumn: getTaskColumnId(state.board, dependency.toTaskId),
+		dependentTaskId: dependency.fromTaskId,
+		dependentTaskColumn: getTaskColumnId(state.board, dependency.fromTaskId),
+		prerequisiteTaskId: dependency.toTaskId,
+		prerequisiteTaskColumn: getTaskColumnId(state.board, dependency.toTaskId),
 		createdAt: dependency.createdAt,
+		handoff: dependency.handoff ?? null,
 	};
 }
 
@@ -357,6 +367,8 @@ async function createTask(input: {
 		ok: true,
 		task: {
 			id: created.id,
+			title: created.title ?? null,
+			summary: created.summary ?? null,
 			column: "backlog",
 			workspacePath: workspaceRepoPath,
 			prompt: created.prompt,
@@ -365,6 +377,92 @@ async function createTask(input: {
 			autoReviewEnabled: created.autoReviewEnabled === true,
 			autoReviewMode: created.autoReviewMode ?? "commit",
 		},
+	};
+}
+
+function parseTaskGraphInput(options: { graphJson?: string; graphBase64?: string }): RuntimeTaskGraph {
+	const graphJson = options.graphJson?.trim() ?? "";
+	const graphBase64 = options.graphBase64?.trim() ?? "";
+	if (!graphJson && !graphBase64) {
+		throw new Error("task apply-graph requires either --graph-json or --graph-base64.");
+	}
+
+	let parsedValue: unknown;
+	if (graphJson) {
+		try {
+			parsedValue = JSON.parse(graphJson);
+		} catch {
+			throw new Error("Invalid --graph-json payload.");
+		}
+	} else {
+		try {
+			parsedValue = JSON.parse(Buffer.from(graphBase64, "base64").toString("utf8"));
+		} catch {
+			throw new Error("Invalid --graph-base64 payload.");
+		}
+	}
+
+	const parsed = runtimeTaskGraphSchema.safeParse(parsedValue);
+	if (!parsed.success) {
+		throw new Error(parsed.error.issues[0]?.message ?? "Invalid task graph payload.");
+	}
+	return parsed.data;
+}
+
+async function applyTaskGraphCommand(input: {
+	cwd: string;
+	projectPath?: string;
+	graphJson?: string;
+	graphBase64?: string;
+}): Promise<JsonRecord> {
+	const graph = parseTaskGraphInput({
+		graphJson: input.graphJson,
+		graphBase64: input.graphBase64,
+	});
+	const workspaceRepoPath = await resolveWorkspaceRepoPath(input.projectPath, input.cwd);
+	const workspaceId = await ensureRuntimeWorkspace(workspaceRepoPath);
+	const runtimeClient = createRuntimeTrpcClient(workspaceId);
+
+	const applied = await updateRuntimeWorkspaceState(runtimeClient, workspaceRepoPath, (state) => {
+		const resolvedBaseRef = graph.defaults?.baseRef?.trim() || resolveTaskBaseRef(state);
+		if (!resolvedBaseRef) {
+			throw new Error("Could not determine task graph base branch for this workspace.");
+		}
+		const result = applyRuntimeTaskGraphToBoard(state.board, graph, {
+			randomUuid: () => globalThis.crypto.randomUUID(),
+			defaultBaseRef: resolvedBaseRef,
+		});
+		const createdTaskIdSet = new Set(result.createdTaskIds);
+		const nextState: RuntimeWorkspaceStateResponse = {
+			...state,
+			board: result.board,
+		};
+		return {
+			board: result.board,
+			value: {
+				createdTasks: result.createdTaskIds
+					.map((taskId) => {
+						const record = findTaskRecord(nextState, taskId);
+						return record ? formatTaskRecord(nextState, record.task, record.columnId) : null;
+					})
+					.filter((record): record is JsonRecord => record !== null),
+				taskIdByClientId: result.taskIdByClientId,
+				dependencies: nextState.board.dependencies
+					.filter(
+						(dependency) =>
+							createdTaskIdSet.has(dependency.fromTaskId) || createdTaskIdSet.has(dependency.toTaskId),
+					)
+					.map((dependency) => formatDependencyRecord(nextState, dependency)),
+			},
+		};
+	});
+
+	return {
+		ok: true,
+		workspacePath: workspaceRepoPath,
+		createdTasks: applied.createdTasks,
+		taskIdByClientId: applied.taskIdByClientId,
+		dependencies: applied.dependencies,
 	};
 }
 
@@ -503,6 +601,17 @@ async function startTask(input: { cwd: string; taskId: string; projectPath?: str
 		throw new Error(
 			`Task "${input.taskId}" is in "${fromColumnId}" and can only be started from backlog or in_progress.`,
 		);
+	}
+	if (fromColumnId === "backlog") {
+		const blockerCount = runtimeState.board.dependencies.filter((dependency) => dependency.fromTaskId === input.taskId)
+			.length;
+		if (blockerCount > 0) {
+			throw new Error(
+				blockerCount === 1
+					? `Task "${input.taskId}" is blocked by 1 prerequisite.`
+					: `Task "${input.taskId}" is blocked by ${blockerCount} prerequisites.`,
+			);
+		}
 	}
 
 	const currentRecord = findTaskRecord(runtimeState, input.taskId);
@@ -959,6 +1068,34 @@ export function registerTaskCommand(program: Command): void {
 				);
 			},
 		);
+
+	task
+		.command("apply-graph")
+		.description("Create multiple connected tasks atomically from a task graph.")
+		.option("--project-path <path>", "Workspace path. Defaults to current directory workspace.")
+		.option("--graph-json <json>", "Inline JSON graph payload.")
+		.option("--graph-base64 <base64>", "Base64-encoded JSON graph payload.")
+		.addHelpText(
+			"after",
+			[
+				"",
+				"Graph schema:",
+				'  {"tasks":[{"clientId":"a","title":"Task A","summary":"Short outcome","prompt":"Task A full prompt"},{"clientId":"b","prompt":"Task B"}],"dependencies":[{"dependentId":"b","prerequisiteId":"a"}],"defaults":{"baseRef":"main"}}',
+				"  Use --graph-base64 when shell escaping inline JSON would be awkward.",
+				"",
+			].join("\n"),
+		)
+		.action(async (options: { projectPath?: string; graphJson?: string; graphBase64?: string }) => {
+			await runTaskCommand(
+				async () =>
+					await applyTaskGraphCommand({
+						cwd: process.cwd(),
+						projectPath: options.projectPath,
+						graphJson: options.graphJson,
+						graphBase64: options.graphBase64,
+					}),
+			);
+		});
 
 	task
 		.command("update")
