@@ -70,6 +70,8 @@ export function TaskInlineCreateCard({
 	idPrefix = "inline-task",
 	agentId,
 	onAgentIdChange,
+	modelId,
+	onModelIdChange,
 	clineSettings,
 	onClineSettingsChange,
 	defaultAgentId,
@@ -102,6 +104,8 @@ export function TaskInlineCreateCard({
 	idPrefix?: string;
 	agentId?: RuntimeAgentId | undefined;
 	onAgentIdChange?: (value: RuntimeAgentId | undefined) => void;
+	modelId?: string;
+	onModelIdChange?: (value: string) => void;
 	clineSettings?: RuntimeTaskClineSettings | undefined;
 	onClineSettingsChange?: (value: RuntimeTaskClineSettings | undefined) => void;
 	/** Default agent ID from runtimeConfig.selectedAgentId, used to show "Default (AgentName)" in picker */
@@ -313,6 +317,8 @@ export function TaskInlineCreateCard({
 					<TaskAgentModelPicker
 						agentId={agentId}
 						onAgentIdChange={onAgentIdChange}
+						modelId={modelId}
+						onModelIdChange={onModelIdChange}
 						clineSettings={clineSettings}
 						onClineSettingsChange={onClineSettingsChange}
 						agentOptions={agentOptions}

@@ -43,7 +43,8 @@ export function resolveKanbanCommandParts(
 	const commandPrefix = resolveNodeCommandPrefix(context);
 	const entrypoint = context.argv[1];
 	if (!entrypoint || !looksLikeEntrypointPath(entrypoint)) {
-		return commandPrefix;
+		const watchedEntrypoint = context.argv.slice(2).find((arg) => looksLikeEntrypointPath(arg));
+		return watchedEntrypoint ? [...commandPrefix, watchedEntrypoint] : commandPrefix;
 	}
 
 	const tsxTarget = context.argv[2];

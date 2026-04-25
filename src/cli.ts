@@ -697,7 +697,7 @@ async function run(): Promise<void> {
 	await program.parseAsync(argv, { from: "user" });
 	if (!shouldAutoOpenBrowserTabForInvocation(argv)) {
 		await Promise.allSettled([disposeCliTelemetryService(), flushNodeTelemetry()]);
-		process.exit(process.exitCode ?? 0);
+		process.exitCode = process.exitCode ?? 0;
 	}
 }
 

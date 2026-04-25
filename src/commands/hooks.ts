@@ -10,6 +10,7 @@ import {
 	buildWindowsCmdArgsArray,
 	resolveWindowsComSpec,
 	resolveWindowsDirectLaunchBinary,
+	resolveWindowsShellLaunchBinary,
 	shouldUseWindowsCmdLaunch,
 } from "../core/windows-cmd-launch";
 import { parseHookRuntimeContextFromEnv } from "../terminal/hook-runtime-context";
@@ -616,7 +617,7 @@ export function buildCodexWrapperSpawn(
 	}
 	return {
 		binary: resolveWindowsComSpec(env),
-		args: buildWindowsCmdArgsArray(realBinary, childArgs),
+		args: buildWindowsCmdArgsArray(resolveWindowsShellLaunchBinary(realBinary, env), childArgs),
 	};
 }
 

@@ -81,7 +81,7 @@ afterEach(() => {
 });
 
 describe("prepareAgentLaunch hook strategies", () => {
-	it("routes codex through hooks codex-wrapper command", async () => {
+	it("uses a non-interactive Codex exec wrapper with hook context for task sessions", async () => {
 		setupTempHome();
 		const launch = await prepareAgentLaunch({
 			taskId: "task-1",
@@ -95,13 +95,12 @@ describe("prepareAgentLaunch hook strategies", () => {
 
 		expect(launch.env.KANBAN_HOOK_TASK_ID).toBe("task-1");
 		expect(launch.env.KANBAN_HOOK_WORKSPACE_ID).toBe("workspace-1");
-
-		const launchCommand = [launch.binary ?? "", ...launch.args].join(" ");
-		expect(launchCommand).toContain("hooks");
-		expect(launchCommand).toContain("codex-wrapper");
-		expect(launchCommand).toContain("--real-binary");
-		expect(launchCommand).toContain("codex");
-		expect(launchCommand).toContain("--");
+		expect(launch.binary).toBe(process.execPath);
+		expect(launch.args[0]).toContain("task-1-exec.cjs");
+		expect(launch.args).not.toContain("codex-wrapper");
+		const wrapperContent = readFileSync(launch.args[0], "utf8");
+		expect(wrapperContent).toContain("shell: false");
+		expect(wrapperContent).not.toContain("shell: true");
 
 		const wrapperPath = join(homedir(), ".cline", "kanban", "hooks", "codex", "codex-wrapper.mjs");
 		expect(existsSync(wrapperPath)).toBe(false);
@@ -157,7 +156,48 @@ describe("prepareAgentLaunch hook strategies", () => {
 			prompt: "",
 		});
 
+		expect(launch.args[0]).toBe("exec");
 		expect(getCodexConfigOverrideValues(launch.args, "check_for_update_on_startup")).toEqual(["false"]);
+	});
+
+	it("uses Codex exec for task prompts so non-TTY task sessions can start", async () => {
+		setupTempHome();
+		const launch = await prepareAgentLaunch({
+			taskId: "task-codex-prompt",
+			agentId: "codex",
+			binary: "codex",
+			args: [],
+			cwd: "/tmp",
+			prompt: "Implement the requested change",
+		});
+
+		expect(launch.args).toContain("exec");
+		expect(launch.args.at(-1)).toBe("Implement the requested change");
+	});
+
+	it("passes explicit model overrides to Claude and Codex", async () => {
+		setupTempHome();
+		const claudeLaunch = await prepareAgentLaunch({
+			taskId: "task-claude-model",
+			agentId: "claude",
+			binary: "claude",
+			args: [],
+			cwd: "/tmp",
+			prompt: "",
+			modelId: "sonnet",
+		});
+		expect(claudeLaunch.args).toEqual(expect.arrayContaining(["--model", "sonnet"]));
+
+		const codexLaunch = await prepareAgentLaunch({
+			taskId: "task-codex-model",
+			agentId: "codex",
+			binary: "codex",
+			args: [],
+			cwd: "/tmp",
+			prompt: "Say OK",
+			modelId: "gpt-5.5",
+		});
+		expect(codexLaunch.args).toEqual(expect.arrayContaining(["--model", "gpt-5.5"]));
 	});
 
 	it("preserves an explicit Codex update-check override", async () => {
@@ -449,6 +489,7 @@ describe("prepareAgentLaunch hook strategies", () => {
 		});
 
 		expect(launch.args).not.toContain("Audit the deployment pipeline");
+		expect(launch.args).not.toContain("exec");
 		expect(launch.deferredStartupInput).toContain("\u001b[200~");
 		expect(launch.deferredStartupInput).toContain("/plan Audit the deployment pipeline");
 		expect(launch.deferredStartupInput?.endsWith("\r")).toBe(true);
@@ -467,6 +508,7 @@ describe("prepareAgentLaunch hook strategies", () => {
 		});
 
 		expect(launch.deferredStartupInput).toContain("/plan");
+		expect(launch.args).not.toContain("exec");
 		expect(launch.deferredStartupInput).not.toContain("/plan ");
 		expect(launch.deferredStartupInput?.endsWith("\r")).toBe(true);
 	});

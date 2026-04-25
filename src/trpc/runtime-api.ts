@@ -283,6 +283,7 @@ export function createRuntimeApi(deps: CreateRuntimeApiDependencies): RuntimeTrp
 					images: body.images,
 					startInPlanMode: body.startInPlanMode,
 					resumeFromTrash: body.resumeFromTrash,
+					modelId: body.modelId,
 					cols: body.cols,
 					rows: body.rows,
 					workspaceId: workspaceScope.workspaceId,
