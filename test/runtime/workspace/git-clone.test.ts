@@ -78,15 +78,19 @@ describe("validateCloneDestination", () => {
 	const serverCwd = "/home/user/workspace";
 
 	it("accepts a path within the CWD", () => {
-		expect(validateCloneDestination("/home/user/workspace/my-repo", serverCwd)).toBe("/home/user/workspace/my-repo");
+		expect(validateCloneDestination("/home/user/workspace/my-repo", serverCwd)).toBe(
+			resolve("/home/user/workspace/my-repo"),
+		);
 	});
 
 	it("accepts a deeply nested path within the CWD", () => {
-		expect(validateCloneDestination("/home/user/workspace/a/b/c", serverCwd)).toBe("/home/user/workspace/a/b/c");
+		expect(validateCloneDestination("/home/user/workspace/a/b/c", serverCwd)).toBe(
+			resolve("/home/user/workspace/a/b/c"),
+		);
 	});
 
 	it("accepts the CWD itself", () => {
-		expect(validateCloneDestination("/home/user/workspace", serverCwd)).toBe("/home/user/workspace");
+		expect(validateCloneDestination("/home/user/workspace", serverCwd)).toBe(resolve("/home/user/workspace"));
 	});
 
 	it("rejects a path outside the CWD", () => {
@@ -217,7 +221,7 @@ describe("cloneGitRepository", () => {
 		const result = await cloneGitRepository("https://github.com/user/my-repo.git", testCwd, outsidePath, "/");
 
 		expect(result.ok).toBe(true);
-		expect(result.clonedPath).toBe(outsidePath);
+		expect(result.clonedPath).toBe(resolve(outsidePath));
 	});
 
 	it("returns error when repo name cannot be derived and no destination provided", async () => {

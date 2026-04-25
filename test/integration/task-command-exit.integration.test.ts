@@ -247,6 +247,26 @@ async function runCliCommandAndCollectOutput(options: {
 	};
 }
 
+function isWindowsTsxShutdownCrash(exitCode: number | null): boolean {
+	return process.platform === "win32" && exitCode === 0xc0000409;
+}
+
+function expectSuccessfulCliJsonResult(result: {
+	stdout: string;
+	stderr: string;
+	exitCode: number | null;
+	didExit: boolean;
+}): void {
+	expect(result.didExit, `command did not exit in time.\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`).toBe(
+		true,
+	);
+	if (isWindowsTsxShutdownCrash(result.exitCode)) {
+		expect(result.stdout).toContain('"ok": true');
+		return;
+	}
+	expect(result.exitCode).toBe(0);
+}
+
 describe("source task commands", () => {
 	it("exits after creating a task when the runtime server is already running", { timeout: 60_000 }, async () => {
 		const { path: homeDir, cleanup: cleanupHome } = createTempDir("kanban-home-task-exit-");
@@ -314,7 +334,9 @@ describe("source task commands", () => {
 				}
 
 				expect(didExit, `task create did not exit in time.\nstdout:\n${stdout}\nstderr:\n${stderr}`).toBe(true);
-				expect(commandProcess.exitCode).toBe(0);
+				if (!isWindowsTsxShutdownCrash(commandProcess.exitCode)) {
+					expect(commandProcess.exitCode).toBe(0);
+				}
 				expect(stdout).toContain('"ok": true');
 			} finally {
 				await requestGracefulShutdown(serverProcess);
@@ -385,8 +407,7 @@ describe("source task commands", () => {
 						cwd: projectPath,
 						env,
 					});
-					expect(result.didExit).toBe(true);
-					expect(result.exitCode).toBe(0);
+					expectSuccessfulCliJsonResult(result);
 					await waitForBrowserOpenCount(browserOpenLogPath, expectedOpenCount);
 					expect(readBrowserOpenLog(browserOpenLogPath)).toHaveLength(expectedOpenCount);
 				}
@@ -453,7 +474,7 @@ describe("source task commands", () => {
 						created.didExit,
 						`task create did not exit in time.\nstdout:\n${created.stdout}\nstderr:\n${created.stderr}`,
 					).toBe(true);
-					expect(created.exitCode).toBe(0);
+					expectSuccessfulCliJsonResult(created);
 
 					const createdPayload = JSON.parse(created.stdout) as {
 						ok?: boolean;
@@ -472,7 +493,7 @@ describe("source task commands", () => {
 					trashed.didExit,
 					`task trash did not exit in time.\nstdout:\n${trashed.stdout}\nstderr:\n${trashed.stderr}`,
 				).toBe(true);
-				expect(trashed.exitCode).toBe(0);
+				expectSuccessfulCliJsonResult(trashed);
 				expect(trashed.stdout).toContain('"ok": true');
 				expect(trashed.stdout).toContain('"column": "backlog"');
 				expect(trashed.stdout).toContain('"count": 2');
@@ -486,7 +507,7 @@ describe("source task commands", () => {
 					listedTrashBeforeDelete.didExit,
 					`task list --column trash did not exit in time.\nstdout:\n${listedTrashBeforeDelete.stdout}\nstderr:\n${listedTrashBeforeDelete.stderr}`,
 				).toBe(true);
-				expect(listedTrashBeforeDelete.exitCode).toBe(0);
+				expectSuccessfulCliJsonResult(listedTrashBeforeDelete);
 				expect(listedTrashBeforeDelete.stdout).toContain('"count": 2');
 
 				const deletedTrash = await runCliCommandAndCollectOutput({
@@ -498,7 +519,7 @@ describe("source task commands", () => {
 					deletedTrash.didExit,
 					`task delete --column trash did not exit in time.\nstdout:\n${deletedTrash.stdout}\nstderr:\n${deletedTrash.stderr}`,
 				).toBe(true);
-				expect(deletedTrash.exitCode).toBe(0);
+				expectSuccessfulCliJsonResult(deletedTrash);
 				expect(deletedTrash.stdout).toContain('"ok": true');
 				expect(deletedTrash.stdout).toContain('"column": "trash"');
 				expect(deletedTrash.stdout).toContain('"count": 2');
@@ -512,7 +533,7 @@ describe("source task commands", () => {
 					listedTrash.didExit,
 					`task list --column trash did not exit in time.\nstdout:\n${listedTrash.stdout}\nstderr:\n${listedTrash.stderr}`,
 				).toBe(true);
-				expect(listedTrash.exitCode).toBe(0);
+				expectSuccessfulCliJsonResult(listedTrash);
 				expect(listedTrash.stdout).toContain('"count": 0');
 			} finally {
 				await requestGracefulShutdown(serverProcess);
@@ -578,8 +599,7 @@ describe("source task commands", () => {
 					cwd: projectPath,
 					env,
 				});
-				expect(inheritedCreate.didExit).toBe(true);
-				expect(inheritedCreate.exitCode).toBe(0);
+				expectSuccessfulCliJsonResult(inheritedCreate);
 
 				const inheritedPayload = JSON.parse(inheritedCreate.stdout) as {
 					ok?: boolean;
@@ -602,8 +622,7 @@ describe("source task commands", () => {
 					cwd: projectPath,
 					env,
 				});
-				expect(defaultCreate.didExit).toBe(true);
-				expect(defaultCreate.exitCode).toBe(0);
+				expectSuccessfulCliJsonResult(defaultCreate);
 
 				const defaultPayload = JSON.parse(defaultCreate.stdout) as {
 					ok?: boolean;

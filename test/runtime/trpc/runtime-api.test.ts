@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { RuntimeConfigState } from "../../../src/config/runtime-config";
@@ -2302,7 +2302,7 @@ describe("createRuntimeApi startTaskSession", () => {
 			workspacePath: "/tmp/repo",
 		});
 
-		expect(response.path).toBe(mcpSettingsPath);
+		expect(response.path).toBe(resolve(mcpSettingsPath));
 		expect(response.servers).toEqual([
 			{
 				name: "linear",
@@ -2343,7 +2343,7 @@ describe("createRuntimeApi startTaskSession", () => {
 			},
 		);
 
-		expect(response.path).toBe(mcpSettingsPath);
+		expect(response.path).toBe(resolve(mcpSettingsPath));
 		expect(response.servers).toEqual([
 			{
 				name: "linear",
@@ -2471,8 +2471,10 @@ describe("createRuntimeApi startTaskSession", () => {
 
 	it("runs reset teardown before deleting debug state paths", async () => {
 		const originalHome = process.env.HOME;
+		const originalUserProfile = process.env.USERPROFILE;
 		const tempHome = `/tmp/kanban-reset-home-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 		process.env.HOME = tempHome;
+		process.env.USERPROFILE = tempHome;
 		mkdirSync(tempHome, { recursive: true });
 		const debugPaths = [
 			join(tempHome, ".cline", "data"),
@@ -2513,14 +2515,21 @@ describe("createRuntimeApi startTaskSession", () => {
 			} else {
 				process.env.HOME = originalHome;
 			}
+			if (originalUserProfile === undefined) {
+				delete process.env.USERPROFILE;
+			} else {
+				process.env.USERPROFILE = originalUserProfile;
+			}
 			rmSync(tempHome, { recursive: true, force: true });
 		}
 	});
 
 	it("aborts reset path deletion when teardown fails", async () => {
 		const originalHome = process.env.HOME;
+		const originalUserProfile = process.env.USERPROFILE;
 		const tempHome = `/tmp/kanban-reset-home-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 		process.env.HOME = tempHome;
+		process.env.USERPROFILE = tempHome;
 		mkdirSync(tempHome, { recursive: true });
 		const debugPaths = [
 			join(tempHome, ".cline", "data"),
@@ -2554,6 +2563,11 @@ describe("createRuntimeApi startTaskSession", () => {
 				delete process.env.HOME;
 			} else {
 				process.env.HOME = originalHome;
+			}
+			if (originalUserProfile === undefined) {
+				delete process.env.USERPROFILE;
+			} else {
+				process.env.USERPROFILE = originalUserProfile;
 			}
 			rmSync(tempHome, { recursive: true, force: true });
 		}

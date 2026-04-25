@@ -20,6 +20,10 @@ function expectMirroredPathBehavior(path: string): void {
 	expect(lstatSync(path).isSymbolicLink()).toBe(true);
 }
 
+function normalizeNewlines(value: string): string {
+	return value.replaceAll("\r\n", "\n");
+}
+
 function runGit(cwd: string, args: string[]): string {
 	const result = spawnSync("git", args, {
 		cwd,
@@ -364,8 +368,10 @@ describe.sequential("task-worktree integration", () => {
 
 				expect(restored.baseCommit).toBe(createdCommit);
 				expect(runGit(restored.path, ["rev-parse", "HEAD"])).toBe(createdCommit);
-				expect(readFileSync(join(restored.path, "tracked.txt"), "utf8")).toBe("base\nlocal change\n");
-				expect(readFileSync(join(restored.path, "notes.txt"), "utf8")).toBe("untracked\n");
+				expect(normalizeNewlines(readFileSync(join(restored.path, "tracked.txt"), "utf8"))).toBe(
+					"base\nlocal change\n",
+				);
+				expect(normalizeNewlines(readFileSync(join(restored.path, "notes.txt"), "utf8"))).toBe("untracked\n");
 				expect(existsSync(patchPath)).toBe(false);
 			} finally {
 				cleanup();
