@@ -145,6 +145,24 @@ describe("prepareAgentLaunch hook strategies", () => {
 		expect(getCodexConfigOverrideValues(launch.args, "check_for_update_on_startup")).toEqual(["false"]);
 	});
 
+	it("appends Kanban sidebar instructions for home pi sessions", async () => {
+		setupTempHome();
+		setKanbanProcessContext();
+		const launch = await prepareAgentLaunch({
+			taskId: "__home_agent__:workspace-1:pi",
+			agentId: "pi",
+			binary: "pi",
+			args: [],
+			cwd: "/tmp",
+			prompt: "",
+		});
+
+		const appendPromptIndex = launch.args.indexOf("--append-system-prompt");
+		expect(appendPromptIndex).toBeGreaterThanOrEqual(0);
+		expect(launch.args[appendPromptIndex + 1]).toContain("Kanban sidebar agent");
+		expect(launch.args[appendPromptIndex + 1]).toContain("Pi does not support MCP natively");
+	});
+
 	it("disables Codex startup update checks for Kanban-launched sessions", async () => {
 		setupTempHome();
 		const launch = await prepareAgentLaunch({
@@ -175,7 +193,7 @@ describe("prepareAgentLaunch hook strategies", () => {
 		expect(launch.args.at(-1)).toBe("Implement the requested change");
 	});
 
-	it("passes explicit model overrides to Claude and Codex", async () => {
+	it("passes explicit model overrides to Claude, Codex, and pi", async () => {
 		setupTempHome();
 		const claudeLaunch = await prepareAgentLaunch({
 			taskId: "task-claude-model",
@@ -198,6 +216,17 @@ describe("prepareAgentLaunch hook strategies", () => {
 			modelId: "gpt-5.5",
 		});
 		expect(codexLaunch.args).toEqual(expect.arrayContaining(["--model", "gpt-5.5"]));
+
+		const piLaunch = await prepareAgentLaunch({
+			taskId: "task-pi-model",
+			agentId: "pi",
+			binary: "pi",
+			args: [],
+			cwd: "/tmp",
+			prompt: "Say OK",
+			modelId: "sonnet:high",
+		});
+		expect(piLaunch.args).toEqual(expect.arrayContaining(["--model", "sonnet:high"]));
 	});
 
 	it("preserves an explicit Codex update-check override", async () => {
@@ -226,6 +255,22 @@ describe("prepareAgentLaunch hook strategies", () => {
 		});
 
 		expect(launch.args).toEqual(["--interactive", "Implement the requested change"]);
+	});
+
+	it("starts pi sessions with the task prompt and plan instructions when requested", async () => {
+		setupTempHome();
+		const launch = await prepareAgentLaunch({
+			taskId: "task-pi-plan",
+			agentId: "pi",
+			binary: "pi",
+			args: [],
+			cwd: "/tmp",
+			prompt: "Audit the deployment pipeline",
+			startInPlanMode: true,
+		});
+
+		expect(launch.args.at(-1)).toContain("produce a clear implementation plan only");
+		expect(launch.args.at(-1)).toContain("Audit the deployment pipeline");
 	});
 
 	it("starts Copilot plan mode through an interactive /plan command", async () => {
@@ -673,6 +718,17 @@ describe("prepareAgentLaunch hook strategies", () => {
 			resumeFromTrash: true,
 		});
 		expect(clineLaunch.args).toContain("--continue");
+
+		const piLaunch = await prepareAgentLaunch({
+			taskId: "task-pi",
+			agentId: "pi",
+			binary: "pi",
+			args: [],
+			cwd: "/tmp",
+			prompt: "",
+			resumeFromTrash: true,
+		});
+		expect(piLaunch.args).toContain("--continue");
 	});
 
 	it("applies autonomous mode flags in adapters for non-droid CLIs", async () => {

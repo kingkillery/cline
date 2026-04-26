@@ -92,7 +92,7 @@ const GIT_PROMPT_VARIANT_OPTIONS: Array<{ value: TaskGitAction; label: string }>
 
 export type RuntimeSettingsSection = "shortcuts";
 
-const SETTINGS_AGENT_ORDER: readonly RuntimeAgentId[] = ["cline", "claude", "codex", "copilot", "droid", "kiro"];
+const SETTINGS_AGENT_ORDER: readonly RuntimeAgentId[] = ["cline", "claude", "codex", "pi", "copilot", "droid", "kiro"];
 
 type SettingsNavId = "general" | "cline" | "git-prompts" | "notifications" | "appearance" | "project";
 
@@ -140,6 +140,13 @@ function getNextShortcutLabel(shortcuts: RuntimeProjectShortcut[], baseLabel: st
 		suffix += 1;
 	}
 	return `${baseLabel} ${suffix}`;
+}
+
+function resolveSelectedAgentHint(agentId: RuntimeAgentId): string | null {
+	if (agentId === "pi") {
+		return "Pi is a good default when you want one CLI that can swap providers and models easily while keeping built-in read, bash, edit, and write tools.";
+	}
+	return null;
 }
 
 function AgentRow({
@@ -790,6 +797,11 @@ export function RuntimeSettingsDialog({
 						))}
 						{config === null ? (
 							<p className="text-text-secondary py-2">Checking which CLIs are installed for this project...</p>
+						) : null}
+						{resolveSelectedAgentHint(selectedAgentId) ? (
+							<p className="text-accent text-[13px] mt-2 mb-0">
+								{resolveSelectedAgentHint(selectedAgentId) ?? ""}
+							</p>
 						) : null}
 						<label
 							htmlFor={bypassPermissionsCheckboxId}

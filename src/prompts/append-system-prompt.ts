@@ -27,6 +27,7 @@ export interface RenderAppendSystemPromptOptions {
 const APPEND_PROMPT_AGENT_IDS: readonly RuntimeAgentId[] = [
 	"claude",
 	"codex",
+	"pi",
 	"copilot",
 	"cline",
 	"droid",
@@ -61,6 +62,8 @@ function renderLinearSetupGuidanceForAgent(agentId: RuntimeAgentId | null): stri
 			return "- If Linear MCP is not available in the current agent (OpenAI Codex), suggest running: `codex mcp add linear --url https://mcp.linear.app/mcp`";
 		case "copilot":
 			return '- If Linear MCP is not available in the current agent (GitHub Copilot CLI), suggest running: `copilot mcp add linear --url https://mcp.linear.app/mcp --type http --tools "*"`';
+		case "pi":
+			return "- Pi does not support MCP natively. If Linear access is required, suggest using a Pi extension/skill that exposes Linear or switch to an agent with built-in MCP support.";
 		case "gemini":
 			return "- If Linear MCP is not available in the current agent (Gemini CLI), suggest running: `gemini mcp add linear https://mcp.linear.app/mcp --transport http --scope user`";
 		case "opencode":

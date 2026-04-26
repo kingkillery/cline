@@ -282,7 +282,8 @@ export function TaskAgentModelPicker({
 	// (either explicitly overridden to cline, or defaulting to cline)
 	const effectiveAgentId = agentId ?? defaultAgentId ?? null;
 	const showClineProviderPicker = effectiveAgentId === "cline";
-	const showCliModelPicker = effectiveAgentId === "claude" || effectiveAgentId === "codex";
+	const showCliModelPicker =
+		effectiveAgentId === "claude" || effectiveAgentId === "codex" || effectiveAgentId === "pi";
 
 	// Show the Cline model picker when a provider is effectively selected
 	// (either explicitly overridden, or the global default provider is set)
@@ -482,7 +483,7 @@ export function TaskAgentModelPicker({
 										onClineSettingsChange?.(undefined);
 										setReasoningEffort("");
 									}
-									if (value !== "claude" && value !== "codex") {
+									if (value !== "claude" && value !== "codex" && value !== "pi") {
 										onModelIdChange?.("");
 									}
 								}}
@@ -501,7 +502,13 @@ export function TaskAgentModelPicker({
 									type="text"
 									value={modelId}
 									onChange={(event) => onModelIdChange?.(event.currentTarget.value)}
-									placeholder={effectiveAgentId === "claude" ? "Default, sonnet, opus..." : "Default, gpt-5.5..."}
+									placeholder={
+										effectiveAgentId === "claude"
+											? "Default, sonnet, opus..."
+											: effectiveAgentId === "pi"
+												? "Default, sonnet:high, openai/gpt-5.4..."
+												: "Default, gpt-5.5..."
+									}
 									className="h-8 w-full rounded-md border border-border bg-surface-2 px-2.5 text-[12px] text-text-primary placeholder:text-text-tertiary focus:border-border-focus focus:outline-none"
 								/>
 							</div>

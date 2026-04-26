@@ -34,8 +34,8 @@ interface CreateTaskOptions {
 	keepDialogOpen?: boolean;
 }
 
-function isCliModelAgent(agentId: RuntimeAgentId | null | undefined): agentId is "claude" | "codex" {
-	return agentId === "claude" || agentId === "codex";
+function isCliModelAgent(agentId: RuntimeAgentId | null | undefined): agentId is "claude" | "codex" | "pi" {
+	return agentId === "claude" || agentId === "codex" || agentId === "pi";
 }
 
 function resolveAgentIdForModelOverride(input: {

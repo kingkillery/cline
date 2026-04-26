@@ -83,7 +83,7 @@ export const TASK_START_ONBOARDING_SLIDES: OnboardingSlide[] = [
 	},
 ];
 
-const ONBOARDING_AGENT_IDS: readonly RuntimeAgentId[] = ["cline", "claude", "codex", "copilot", "droid", "kiro"];
+const ONBOARDING_AGENT_IDS: readonly RuntimeAgentId[] = ["cline", "claude", "codex", "pi", "copilot", "droid", "kiro"];
 const FALLBACK_ONBOARDING_SLIDE: OnboardingSlide = {
 	kind: "agent-selection",
 	title: "",
@@ -299,6 +299,9 @@ function resolveInstallInstructions(agentId: RuntimeAgentId): string {
 	if (agentId === "codex") {
 		return "OpenAI's coding agent CLI with access to the latest GPT models.";
 	}
+	if (agentId === "pi") {
+		return "Pi's minimal coding harness with built-in read, bash, edit, and write tools plus flexible model/provider routing.";
+	}
 	if (agentId === "copilot") {
 		return "GitHub's terminal coding agent with interactive sessions, plan mode, autopilot, and built-in MCP support.";
 	}
@@ -318,6 +321,9 @@ function getInstallLinkLabel(agentId: RuntimeAgentId): string {
 	if (agentId === "codex") {
 		return "Learn more";
 	}
+	if (agentId === "pi") {
+		return "Learn more";
+	}
 	if (agentId === "copilot") {
 		return "Learn more";
 	}
@@ -328,6 +334,13 @@ function getInstallLinkLabel(agentId: RuntimeAgentId): string {
 		return "Learn more";
 	}
 	return "Install guide";
+}
+
+function resolveAgentSelectionHint(agentId: RuntimeAgentId, recommended: boolean): string | null {
+	if (agentId === "pi" && recommended) {
+		return "Good default if you want one CLI that can switch providers and models easily while keeping built-in coding tools.";
+	}
+	return null;
 }
 
 export function TaskStartAgentOnboardingCarousel({
@@ -384,6 +397,11 @@ export function TaskStartAgentOnboardingCarousel({
 				};
 			}),
 		[agents],
+	);
+
+	const hasDetectedClaudeOrCodex = useMemo(
+		() => onboardingAgents.some((agent) => agent.installed && (agent.id === "claude" || agent.id === "codex")),
+		[onboardingAgents],
 	);
 
 	const handleAgentSelect = (agentId: RuntimeAgentId) => {
@@ -491,89 +509,106 @@ export function TaskStartAgentOnboardingCarousel({
 
 			{currentSlide.kind === "agent-selection" ? (
 				<div className="space-y-2">
-					{onboardingAgents.map((agent) => (
-						<div
-							key={agent.id}
-							className={cn(
-								"rounded-md border bg-surface-1 p-3",
-								activeAgentId === agent.id ? "border-accent" : "border-border",
-							)}
-						>
+					{onboardingAgents.map((agent) => {
+						const isRecommendedPi =
+							agent.id === "pi" && agent.installed && !hasDetectedClaudeOrCodex;
+						const agentSelectionHint = resolveAgentSelectionHint(agent.id, isRecommendedPi);
+						return (
 							<div
-								role="button"
-								tabIndex={0}
-								onClick={() => handleAgentSelect(agent.id)}
-								onKeyDown={(event) => {
-									if (event.key === "Enter" || event.key === " ") {
-										event.preventDefault();
-										handleAgentSelect(agent.id);
-									}
-								}}
-								className="flex cursor-pointer items-center justify-between gap-3"
-							>
-								<span className="flex items-center gap-2">
-									<RadixCheckbox.Root
-										checked={activeAgentId === agent.id}
-										onCheckedChange={(checked) => {
-											if (checked === true) {
-												handleAgentSelect(agent.id);
-											}
-										}}
-										className="flex h-4 w-4 cursor-pointer items-center justify-center rounded border border-border-bright bg-surface-2 data-[state=checked]:bg-accent data-[state=checked]:border-accent"
-									>
-										<RadixCheckbox.Indicator>
-											<Check size={12} className="text-white" />
-										</RadixCheckbox.Indicator>
-									</RadixCheckbox.Root>
-									<span className="text-[13px] text-text-primary">{agent.label}</span>
-								</span>
-								{agent.id === "cline" ? (
-									clineAuthenticated ? (
-										<AgentStatusBadge
-											label="Authenticated"
-											statusClassName="bg-status-green/10 text-status-green"
-										/>
-									) : null
-								) : agent.installed ? (
-									<AgentStatusBadge label="Detected" statusClassName="bg-status-green/10 text-status-green" />
-								) : (
-									<AgentStatusBadge label="Not installed" statusClassName="bg-surface-3 text-text-secondary" />
+								key={agent.id}
+								className={cn(
+									"rounded-md border bg-surface-1 p-3",
+									activeAgentId === agent.id
+										? "border-accent"
+										: isRecommendedPi
+											? "border-accent/40 bg-accent/5"
+											: "border-border",
 								)}
-							</div>
-							<p className="mt-2 mb-0 text-[12px] text-text-secondary">
-								{resolveInstallInstructions(agent.id)}
-								{agent.id !== "cline" && agent.installUrl ? (
-									<>
-										{" "}
-										<a
-											href={agent.installUrl}
-											target="_blank"
-											rel="noreferrer"
-											className="text-accent hover:underline"
+							>
+								<div
+									role="button"
+									tabIndex={0}
+									onClick={() => handleAgentSelect(agent.id)}
+									onKeyDown={(event) => {
+										if (event.key === "Enter" || event.key === " ") {
+											event.preventDefault();
+											handleAgentSelect(agent.id);
+										}
+									}}
+									className="flex cursor-pointer items-center justify-between gap-3"
+								>
+									<span className="flex items-center gap-2">
+										<RadixCheckbox.Root
+											checked={activeAgentId === agent.id}
+											onCheckedChange={(checked) => {
+												if (checked === true) {
+													handleAgentSelect(agent.id);
+												}
+											}}
+											className="flex h-4 w-4 cursor-pointer items-center justify-center rounded border border-border-bright bg-surface-2 data-[state=checked]:bg-accent data-[state=checked]:border-accent"
 										>
-											{getInstallLinkLabel(agent.id)}
-										</a>
-									</>
-								) : null}
-							</p>
-							{agent.id === "cline" ? (
-								<div className="mt-2">
-									<ClineSetupSection
-										controller={clineSettings}
-										controlsDisabled={false}
-										showMcpSettings={false}
-										onError={setClineSetupError}
-										onSaved={onClineSetupSaved}
-									/>
-									{clineSetupError ? (
-										<div className="mt-2 rounded-md border border-status-red/30 bg-status-red/5 p-2 text-[12px] text-text-primary">
-											{clineSetupError}
-										</div>
-									) : null}
+											<RadixCheckbox.Indicator>
+												<Check size={12} className="text-white" />
+											</RadixCheckbox.Indicator>
+										</RadixCheckbox.Root>
+										<span className="text-[13px] text-text-primary">{agent.label}</span>
+									</span>
+									<span className="flex items-center gap-2">
+										{isRecommendedPi ? (
+											<AgentStatusBadge label="Recommended" statusClassName="bg-accent/12 text-accent" />
+										) : null}
+										{agent.id === "cline" ? (
+											clineAuthenticated ? (
+												<AgentStatusBadge
+													label="Authenticated"
+													statusClassName="bg-status-green/10 text-status-green"
+												/>
+											) : null
+										) : agent.installed ? (
+											<AgentStatusBadge label="Detected" statusClassName="bg-status-green/10 text-status-green" />
+										) : (
+											<AgentStatusBadge label="Not installed" statusClassName="bg-surface-3 text-text-secondary" />
+										)}
+									</span>
 								</div>
-							) : null}
-						</div>
-					))}
+								<p className="mt-2 mb-0 text-[12px] text-text-secondary">
+									{resolveInstallInstructions(agent.id)}
+									{agent.id !== "cline" && agent.installUrl ? (
+										<>
+											{" "}
+											<a
+												href={agent.installUrl}
+												target="_blank"
+												rel="noreferrer"
+												className="text-accent hover:underline"
+											>
+												{getInstallLinkLabel(agent.id)}
+											</a>
+										</>
+									) : null}
+								</p>
+								{agentSelectionHint ? (
+									<p className="mt-2 mb-0 text-[12px] text-accent">{agentSelectionHint}</p>
+								) : null}
+								{agent.id === "cline" ? (
+									<div className="mt-2">
+										<ClineSetupSection
+											controller={clineSettings}
+											controlsDisabled={false}
+											showMcpSettings={false}
+											onError={setClineSetupError}
+											onSaved={onClineSetupSaved}
+										/>
+										{clineSetupError ? (
+											<div className="mt-2 rounded-md border border-status-red/30 bg-status-red/5 p-2 text-[12px] text-text-primary">
+												{clineSetupError}
+											</div>
+										) : null}
+									</div>
+								) : null}
+							</div>
+						);
+					})}
 					{selectionError ? (
 						<div className="rounded-md border border-status-red/30 bg-status-red/5 p-2 text-[12px] text-text-primary">
 							{selectionError}
