@@ -3,7 +3,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { resolveWindowsDirectLaunchBinary, shouldUseWindowsCmdLaunch } from "../../../src/core/windows-cmd-launch";
+import {
+	resolveWindowsDirectLaunchBinary,
+	resolveWindowsShellLaunchBinary,
+	shouldUseWindowsCmdLaunch,
+} from "../../../src/core/windows-cmd-launch";
 
 function createWindowsBinary(directory: string, fileName: string): string {
 	const filePath = join(directory, fileName);
@@ -93,7 +97,7 @@ describe("shouldUseWindowsCmdLaunch", () => {
 	it("returns true when PATH resolves a bare binary to .cmd", () => {
 		const tempDirectory = mkdtempSync(join(tmpdir(), "kanban-win-launch-"));
 		tempDirectories.push(tempDirectory);
-		createWindowsBinary(tempDirectory, "codex.cmd");
+		const binaryPath = createWindowsBinary(tempDirectory, "codex.cmd");
 
 		expect(
 			shouldUseWindowsCmdLaunch("codex", "win32", {
@@ -102,6 +106,13 @@ describe("shouldUseWindowsCmdLaunch", () => {
 				ComSpec: "C:\\Windows\\System32\\cmd.exe",
 			}),
 		).toBe(true);
+		expect(
+			resolveWindowsShellLaunchBinary("codex", {
+				PATH: tempDirectory,
+				PATHEXT: ".com;.exe;.bat;.cmd",
+				ComSpec: "C:\\Windows\\System32\\cmd.exe",
+			}),
+		).toBe(binaryPath);
 	});
 
 	it("keeps cmd wrapping fallback when resolution is ambiguous", () => {

@@ -1,6 +1,7 @@
+import { existsSync } from "node:fs";
 import { access, readFile } from "node:fs/promises";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { dirname, extname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import type {
@@ -11,6 +12,7 @@ import type {
 } from "../core/api-contract";
 import { buildKanbanCommandParts } from "../core/kanban-command";
 import { quoteShellArg } from "../core/shell";
+import { resolveWindowsShellLaunchBinary } from "../core/windows-cmd-launch";
 import { lockedFileSystem } from "../fs/locked-file-system";
 import { resolveHomeAgentAppendSystemPrompt } from "../prompts/append-system-prompt";
 import { getRuntimeHomePath } from "../state/workspace-state";
@@ -35,6 +37,7 @@ export interface AgentAdapterLaunchInput {
 	images?: RuntimeTaskImage[];
 	startInPlanMode?: boolean;
 	resumeFromTrash?: boolean;
+	modelId?: string;
 	env?: Record<string, string | undefined>;
 	workspaceId?: string;
 }
@@ -78,6 +81,64 @@ function escapeForTemplateLiteral(value: string): string {
 
 function powerShellQuote(value: string): string {
 	return `"${value.replaceAll("`", "``").replaceAll('"', '`"')}"`;
+}
+
+function buildCodexExecWrapperContent(binary: string, args: string[]): string {
+	const resolvedBinary = process.platform === "win32" ? resolveWindowsShellLaunchBinary(binary) : binary;
+	if (process.platform === "win32") {
+		const npmShimCodexScript =
+			extname(resolvedBinary).toLowerCase() === ".cmd"
+				? join(dirname(resolvedBinary), "node_modules", "@openai", "codex", "bin", "codex.js")
+				: null;
+		const launchBinary = npmShimCodexScript && existsSync(npmShimCodexScript) ? process.execPath : resolvedBinary;
+		const launchArgs = npmShimCodexScript && existsSync(npmShimCodexScript) ? [npmShimCodexScript, ...args] : args;
+		return `const { spawn } = require("node:child_process");
+
+const child = spawn(${JSON.stringify(launchBinary)}, ${JSON.stringify(launchArgs)}, {
+  cwd: process.cwd(),
+  env: process.env,
+  shell: false,
+  stdio: ["ignore", "inherit", "inherit"],
+});
+
+child.on("error", (error) => {
+  console.error(error instanceof Error ? error.message : String(error));
+  process.exitCode = 1;
+});
+
+child.on("exit", (code, signal) => {
+  if (typeof code === "number") {
+    process.exit(code);
+    return;
+  }
+  console.error(signal ? \`Codex exited via signal \${signal}\` : "Codex exited without a code.");
+  process.exit(1);
+});
+`;
+	}
+	return `const { spawn } = require("node:child_process");
+
+const child = spawn(${JSON.stringify(resolvedBinary)}, ${JSON.stringify(args)}, {
+  cwd: process.cwd(),
+  env: process.env,
+  shell: false,
+  stdio: ["ignore", "inherit", "inherit"],
+});
+
+child.on("error", (error) => {
+  console.error(error instanceof Error ? error.message : String(error));
+  process.exitCode = 1;
+});
+
+child.on("exit", (code, signal) => {
+  if (typeof code === "number") {
+    process.exit(code);
+    return;
+  }
+  console.error(signal ? \`Codex exited via signal \${signal}\` : "Codex exited without a code.");
+  process.exit(1);
+});
+`;
 }
 
 function resolveHookContext(input: AgentAdapterLaunchInput): HookContext | null {
@@ -639,6 +700,9 @@ const claudeAdapter: AgentSessionAdapter = {
 		if (input.resumeFromTrash && !hasCliOption(args, "--continue")) {
 			args.push("--continue");
 		}
+		if (input.modelId?.trim() && !hasCliOption(args, "--model")) {
+			args.push("--model", input.modelId.trim());
+		}
 		if (input.startInPlanMode) {
 			const withoutImmediateBypass = args.filter((arg) => arg !== "--dangerously-skip-permissions");
 			args.length = 0;
@@ -752,7 +816,7 @@ function shouldInspectCodexOutputForTransition(summary: RuntimeTaskSessionSummar
 
 const codexAdapter: AgentSessionAdapter = {
 	async prepare(input) {
-		const codexArgs = [...input.args];
+		const codexArgs = input.startInPlanMode ? [...input.args] : ["exec", ...input.args];
 		const env: Record<string, string | undefined> = {};
 		let binary = input.binary;
 		let deferredStartupInput: string | undefined;
@@ -760,6 +824,9 @@ const codexAdapter: AgentSessionAdapter = {
 
 		if (!hasCodexConfigOverride(codexArgs, "check_for_update_on_startup")) {
 			codexArgs.push("-c", "check_for_update_on_startup=false");
+		}
+		if (input.modelId?.trim() && !hasCliOption(codexArgs, "--model")) {
+			codexArgs.push("--model", input.modelId.trim());
 		}
 
 		if (input.autonomousModeEnabled && !hasCliOption(codexArgs, "--dangerously-bypass-approvals-and-sandbox")) {
@@ -798,21 +865,17 @@ const codexAdapter: AgentSessionAdapter = {
 			codexArgs.push(trimmed);
 		}
 
-		if (hooks) {
-			const wrapperParts = buildHooksCommandParts([
-				"codex-wrapper",
-				"--real-binary",
-				input.binary ?? "codex",
-				"--",
-				...codexArgs,
-			]);
-			binary = wrapperParts[0];
-			const args = wrapperParts.slice(1);
+		if (hooks && !input.startInPlanMode) {
+			const wrapperPath = join(
+				getHookAgentDirectory("codex"),
+				`${input.taskId}-exec.cjs`,
+			);
+			await ensureTextFile(wrapperPath, buildCodexExecWrapperContent(input.binary ?? "codex", codexArgs));
+			binary = process.execPath;
 			return {
 				binary,
-				args,
+				args: [wrapperPath],
 				env,
-				deferredStartupInput,
 				detectOutputTransition: codexPromptDetector,
 				shouldInspectOutputForTransition: shouldInspectCodexOutputForTransition,
 			};

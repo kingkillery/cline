@@ -1,4 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import { buildCodexWrapperChildArgs, buildCodexWrapperSpawn } from "../../src/commands/hooks";
 
@@ -23,15 +26,22 @@ describe("buildCodexWrapperChildArgs", () => {
 	});
 
 	it("uses ComSpec on Windows for npm shim binaries", () => {
+		const tempDirectory = mkdtempSync(join(tmpdir(), "kanban-codex-wrapper-"));
+		const shimPath = join(tempDirectory, "codex.cmd");
+		writeFileSync(shimPath, "");
+
 		const launch = buildCodexWrapperSpawn("codex", ["exec", "fix the bug"], "win32", {
 			ComSpec: "C:\\Windows\\System32\\cmd.exe",
+			PATH: tempDirectory,
+			PATHEXT: ".com;.exe;.bat;.cmd",
 		});
+		rmSync(tempDirectory, { recursive: true, force: true });
 
 		expect(launch.binary).toBe("C:\\Windows\\System32\\cmd.exe");
 		expect(launch.args[0]).toBe("/d");
 		expect(launch.args[1]).toBe("/s");
 		expect(launch.args[2]).toBe("/c");
-		expect(launch.args[3]).toContain("codex");
+		expect(launch.args[3]).toContain("codex.cmd");
 		expect(launch.args[3]).toContain("exec");
 	});
 

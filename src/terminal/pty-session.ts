@@ -4,6 +4,7 @@ import {
 	buildWindowsCmdArgsArray,
 	resolveWindowsComSpec,
 	resolveWindowsDirectLaunchBinary,
+	resolveWindowsShellLaunchBinary,
 	shouldUseWindowsCmdLaunch,
 } from "../core/windows-cmd-launch";
 
@@ -95,7 +96,9 @@ export class PtySession {
 				: useWindowsShellLaunch
 					? resolveWindowsComSpec(launchEnv)
 					: binary;
-		const spawnArgs = useWindowsShellLaunch ? buildWindowsCmdArgsArray(binary, normalizedArgs) : normalizedArgs;
+		const spawnArgs = useWindowsShellLaunch
+			? buildWindowsCmdArgsArray(resolveWindowsShellLaunchBinary(binary, launchEnv), normalizedArgs)
+			: normalizedArgs;
 		const ptyOptions: pty.IPtyForkOptions = {
 			name: terminalName,
 			cwd,

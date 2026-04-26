@@ -227,6 +227,8 @@ function cloneTaskClineSettings(settings?: RuntimeTaskClineSettings): RuntimeTas
 export function TaskAgentModelPicker({
 	agentId,
 	onAgentIdChange,
+	modelId = "",
+	onModelIdChange,
 	clineSettings,
 	onClineSettingsChange,
 	agentOptions,
@@ -244,6 +246,8 @@ export function TaskAgentModelPicker({
 }: {
 	agentId: RuntimeAgentId | undefined;
 	onAgentIdChange: (value: RuntimeAgentId | undefined) => void;
+	modelId?: string;
+	onModelIdChange?: (value: string) => void;
 	clineSettings?: RuntimeTaskClineSettings | undefined;
 	onClineSettingsChange?: (value: RuntimeTaskClineSettings | undefined) => void;
 	agentOptions: Array<{ value: string; label: string }>;
@@ -278,6 +282,7 @@ export function TaskAgentModelPicker({
 	// (either explicitly overridden to cline, or defaulting to cline)
 	const effectiveAgentId = agentId ?? defaultAgentId ?? null;
 	const showClineProviderPicker = effectiveAgentId === "cline";
+	const showCliModelPicker = effectiveAgentId === "claude" || effectiveAgentId === "codex";
 
 	// Show the Cline model picker when a provider is effectively selected
 	// (either explicitly overridden, or the global default provider is set)
@@ -477,6 +482,9 @@ export function TaskAgentModelPicker({
 										onClineSettingsChange?.(undefined);
 										setReasoningEffort("");
 									}
+									if (value !== "claude" && value !== "codex") {
+										onModelIdChange?.("");
+									}
 								}}
 							>
 								{agentOptions.map((option) => (
@@ -486,6 +494,18 @@ export function TaskAgentModelPicker({
 								))}
 							</NativeSelect>
 						</div>
+						{showCliModelPicker ? (
+							<div className="w-full sm:w-1/2 min-w-0">
+								<span className="text-[11px] text-text-secondary block mb-1">Model</span>
+								<input
+									type="text"
+									value={modelId}
+									onChange={(event) => onModelIdChange?.(event.currentTarget.value)}
+									placeholder={effectiveAgentId === "claude" ? "Default, sonnet, opus..." : "Default, gpt-5.5..."}
+									className="h-8 w-full rounded-md border border-border bg-surface-2 px-2.5 text-[12px] text-text-primary placeholder:text-text-tertiary focus:border-border-focus focus:outline-none"
+								/>
+							</div>
+						) : null}
 						{showClineProviderPicker ? (
 							<div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
 								<div className="min-w-0">

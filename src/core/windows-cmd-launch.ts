@@ -119,6 +119,10 @@ export function resolveWindowsDirectLaunchBinary(binary: string, env: NodeJS.Pro
 	return candidate.path;
 }
 
+export function resolveWindowsShellLaunchBinary(binary: string, env: NodeJS.ProcessEnv = process.env): string {
+	return resolveWindowsBinaryCandidate(binary, env)?.path ?? binary;
+}
+
 function normalizeWindowsCmdArgument(value: string): string {
 	return value.replaceAll("\r\n", "\n").replaceAll("\r", "\n").replaceAll("\n", "\\n");
 }

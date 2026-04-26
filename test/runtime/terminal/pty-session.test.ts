@@ -87,21 +87,29 @@ describe("PtySession", () => {
 	it("launches through cmd shell on Windows", () => {
 		setPlatform("win32");
 		process.env.ComSpec = "C:\\Windows\\System32\\cmd.exe";
+		process.env.PATHEXT = ".com;.exe;.bat;.cmd";
+		const windowsBinDir = mkdtempSync(join(tmpdir(), "kanban-win-path-"));
+		writeFileSync(join(windowsBinDir, "codex.cmd"), "");
 		const ptyProcess = createMockPtyProcess();
 		ptyMocks.spawn.mockReturnValue(ptyProcess);
 
-		const session = PtySession.spawn({
-			binary: "codex",
-			args: ["--foo", "hello world"],
-			cwd: "C:/repo",
-			env: { TERM: "xterm-256color" },
-			cols: 120,
-			rows: 40,
-		});
+		let session: PtySession;
+		try {
+			session = PtySession.spawn({
+				binary: "codex",
+				args: ["--foo", "hello world"],
+				cwd: "C:/repo",
+				env: { TERM: "xterm-256color", PATH: windowsBinDir, PATHEXT: ".com;.exe;.bat;.cmd" },
+				cols: 120,
+				rows: 40,
+			});
+		} finally {
+			rmSync(windowsBinDir, { recursive: true, force: true });
+		}
 
 		expect(ptyMocks.spawn).toHaveBeenCalledTimes(1);
 		expect(ptyMocks.spawn.mock.calls[0]?.[0]).toBe("C:\\Windows\\System32\\cmd.exe");
-		expect(ptyMocks.spawn.mock.calls[0]?.[1]).toEqual(["/d", "/s", "/c", expect.stringContaining("codex")]);
+		expect(ptyMocks.spawn.mock.calls[0]?.[1]).toEqual(["/d", "/s", "/c", expect.stringContaining("codex.cmd")]);
 		expect(ptyMocks.spawn.mock.calls[0]?.[1]?.[3]).toContain("hello^");
 		expect(ptyMocks.spawn.mock.calls[0]?.[1]?.[3]).toContain("world");
 		expect(session.pid).toBe(4242);
