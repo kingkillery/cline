@@ -74,6 +74,7 @@ export type RuntimeSlashCommandsResponse = z.infer<typeof runtimeSlashCommandsRe
 export const runtimeAgentIdSchema = z.enum([
 	"claude",
 	"codex",
+	"pi",
 	"copilot",
 	"gemini",
 	"opencode",

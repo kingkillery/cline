@@ -1499,6 +1499,50 @@ const kiroAdapter: AgentSessionAdapter = {
 	},
 };
 
+const piAdapter: AgentSessionAdapter = {
+	async prepare(input) {
+		const args = [...input.args];
+		const env: Record<string, string | undefined> = {};
+		const appendedSystemPrompt = resolveHomeAgentAppendSystemPrompt(input.taskId);
+
+		if (input.resumeFromTrash && !hasCliOption(args, "--continue") && !hasCliOption(args, "-c")) {
+			args.push("--continue");
+		}
+
+		if (input.modelId?.trim() && !hasCliOption(args, "--model")) {
+			args.push("--model", input.modelId.trim());
+		}
+
+		if (
+			appendedSystemPrompt &&
+			!hasCliOption(args, "--append-system-prompt") &&
+			!hasCliOption(args, "--system-prompt")
+		) {
+			args.push("--append-system-prompt", appendedSystemPrompt);
+		}
+
+		const trimmedPrompt = input.prompt.trim();
+		const planPrompt = input.startInPlanMode
+			? [
+					"First, inspect the codebase and produce a clear implementation plan only.",
+					"Do not modify files, do not use write, edit, or bash tools to implement anything yet.",
+					"After you present the plan, ask for approval before making changes.",
+					trimmedPrompt
+						? `\n\nTask:\n${trimmedPrompt}`
+						: " Ask the user what they want planned if the task is unclear.",
+				].join(" ")
+			: input.prompt;
+		const withPromptLaunch = withPrompt(args, planPrompt, "append");
+		return {
+			...withPromptLaunch,
+			env: {
+				...withPromptLaunch.env,
+				...env,
+			},
+		};
+	},
+};
+
 const clineAdapter: AgentSessionAdapter = {
 	async prepare(input) {
 		const args = [...input.args];
@@ -1559,6 +1603,7 @@ const clineAdapter: AgentSessionAdapter = {
 const ADAPTERS: Record<RuntimeAgentId, AgentSessionAdapter> = {
 	claude: claudeAdapter,
 	codex: codexAdapter,
+	pi: piAdapter,
 	copilot: copilotAdapter,
 	gemini: geminiAdapter,
 	opencode: opencodeAdapter,

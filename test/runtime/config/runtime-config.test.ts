@@ -68,12 +68,15 @@ function writeFakeCommand(binDir: string, command: string): void {
 describe.sequential("runtime-config auto agent selection", () => {
 	it("selects agents using the configured priority order", () => {
 		expect(pickBestInstalledAgentIdFromDetected(["codex", "opencode", "gemini"])).toBe("codex");
+		expect(pickBestInstalledAgentIdFromDetected(["pi", "opencode", "gemini"])).toBe("pi");
+		expect(pickBestInstalledAgentIdFromDetected(["pi", "copilot", "gemini"])).toBe("pi");
 		expect(pickBestInstalledAgentIdFromDetected(["copilot", "opencode", "gemini"])).toBe("copilot");
 		expect(pickBestInstalledAgentIdFromDetected(["opencode", "droid", "gemini"])).toBe("droid");
 		expect(pickBestInstalledAgentIdFromDetected(["kiro-cli", "gemini"])).toBe("kiro");
 		expect(pickBestInstalledAgentIdFromDetected(["droid", "gemini", "cline"])).toBe("droid");
 		expect(pickBestInstalledAgentIdFromDetected(["gemini", "cline"])).toBeNull();
-		expect(pickBestInstalledAgentIdFromDetected(["claude", "codex", "copilot", "cline"])).toBe("claude");
+		expect(pickBestInstalledAgentIdFromDetected(["claude", "codex", "pi", "copilot", "cline"])).toBe("claude");
+		expect(pickBestInstalledAgentIdFromDetected(["codex", "pi"])).toBe("codex");
 		expect(pickBestInstalledAgentIdFromDetected(["claude", "droid"])).toBe("claude");
 		expect(pickBestInstalledAgentIdFromDetected(["cline"])).toBeNull();
 		expect(pickBestInstalledAgentIdFromDetected([])).toBeNull();

@@ -40,6 +40,7 @@ interface HookSnapshot {
 	newTaskImages: TaskImage[];
 	newTaskBranchRef: string;
 	newTaskAgentId: RuntimeAgentId | undefined;
+	newTaskModelId: string;
 	newTaskClineSettings: RuntimeTaskClineSettings | undefined;
 	editingTaskId: string | null;
 	editTaskPrompt: string;
@@ -57,6 +58,7 @@ interface HookSnapshot {
 	setEditTaskAutoReviewEnabled: (value: boolean) => void;
 	setEditTaskAutoReviewMode: (value: TaskAutoReviewMode) => void;
 	setNewTaskAgentId: (value: RuntimeAgentId | undefined) => void;
+	setNewTaskModelId: (value: string) => void;
 	setNewTaskClineSettings: (value: RuntimeTaskClineSettings | undefined) => void;
 }
 
@@ -71,10 +73,12 @@ function HookHarness({
 	initialBoard,
 	onSnapshot,
 	queueTaskStartAfterEdit,
+	selectedAgentId = null,
 }: {
 	initialBoard: BoardData;
 	onSnapshot: (snapshot: HookSnapshot) => void;
 	queueTaskStartAfterEdit?: (taskId: string) => void;
+	selectedAgentId?: RuntimeAgentId | null;
 }): null {
 	const [board, setBoard] = useState<BoardData>(initialBoard);
 	const [, setSelectedTaskId] = useState<string | null>(null);
@@ -84,7 +88,7 @@ function HookHarness({
 		currentProjectId: "project-1",
 		createTaskBranchOptions: [{ value: "main", label: "main" }],
 		defaultTaskBranchRef: "main",
-		selectedAgentId: null,
+		selectedAgentId,
 		setSelectedTaskId,
 		queueTaskStartAfterEdit,
 	});
@@ -97,6 +101,7 @@ function HookHarness({
 			newTaskImages: editor.newTaskImages,
 			newTaskBranchRef: editor.newTaskBranchRef,
 			newTaskAgentId: editor.newTaskAgentId,
+			newTaskModelId: editor.newTaskModelId,
 			newTaskClineSettings: editor.newTaskClineSettings,
 			editingTaskId: editor.editingTaskId,
 			editTaskPrompt: editor.editTaskPrompt,
@@ -114,6 +119,7 @@ function HookHarness({
 			setEditTaskAutoReviewEnabled: editor.setEditTaskAutoReviewEnabled,
 			setEditTaskAutoReviewMode: editor.setEditTaskAutoReviewMode,
 			setNewTaskAgentId: editor.setNewTaskAgentId,
+			setNewTaskModelId: editor.setNewTaskModelId,
 			setNewTaskClineSettings: editor.setNewTaskClineSettings,
 		});
 	}, [
@@ -133,11 +139,13 @@ function HookHarness({
 		editor.newTaskImages,
 		editor.newTaskBranchRef,
 		editor.newTaskAgentId,
+		editor.newTaskModelId,
 		editor.newTaskClineSettings,
 		editor.setEditTaskAutoReviewEnabled,
 		editor.setEditTaskAutoReviewMode,
 		editor.setEditTaskPrompt,
 		editor.setNewTaskImages,
+		editor.setNewTaskModelId,
 		editor.setNewTaskPrompt,
 		onSnapshot,
 	]);
@@ -430,6 +438,39 @@ describe("useTaskEditor", () => {
 		expect(createdCard?.clineSettings).toEqual({
 			reasoningEffort: "low",
 		});
+	});
+
+	it("uses the selected pi agent when a task only overrides the model", async () => {
+		let latestSnapshot: HookSnapshot | null = null;
+
+		await act(async () => {
+			root.render(
+				<HookHarness
+					initialBoard={createBoard()}
+					selectedAgentId="pi"
+					onSnapshot={(snapshot) => {
+						latestSnapshot = snapshot;
+					}}
+				/>,
+			);
+		});
+
+		await act(async () => {
+			requireSnapshot(latestSnapshot).handleOpenCreateTask();
+		});
+
+		await act(async () => {
+			requireSnapshot(latestSnapshot).setNewTaskPrompt("Model override only");
+			requireSnapshot(latestSnapshot).setNewTaskModelId("sonnet:high");
+		});
+
+		await act(async () => {
+			requireSnapshot(latestSnapshot).handleCreateTask();
+		});
+
+		const createdCard = requireSnapshot(latestSnapshot).board.columns[0]?.cards[0];
+		expect(createdCard?.agentId).toBe("pi");
+		expect(createdCard?.modelId).toBe("sonnet:high");
 	});
 
 	it("preserves per-task agent/model override fields on each split task", async () => {

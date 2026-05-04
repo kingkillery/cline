@@ -27,6 +27,14 @@ export const RUNTIME_AGENT_CATALOG: RuntimeAgentCatalogEntry[] = [
 		installUrl: "https://github.com/openai/codex",
 	},
 	{
+		id: "pi",
+		label: "pi CLI",
+		binary: "pi",
+		baseArgs: [],
+		autonomousArgs: [],
+		installUrl: "https://pi.dev",
+	},
+	{
 		id: "copilot",
 		label: "GitHub Copilot CLI",
 		binary: "copilot",
@@ -82,6 +90,7 @@ export const RUNTIME_LAUNCH_SUPPORTED_AGENT_IDS: readonly RuntimeAgentId[] = [
 	"cline",
 	"claude",
 	"codex",
+	"pi",
 	"copilot",
 	"droid",
 	"kiro",
