@@ -19,7 +19,7 @@ import { canCreateTaskDependency } from "@/state/board-state";
 import { findCardColumnId, type ProgrammaticCardMoveInFlight } from "@/state/drag-rules";
 import type { BoardCard, BoardColumnId, BoardData, BoardDependency } from "@/types";
 
-const BOARD_COLUMN_ORDER: BoardColumnId[] = ["backlog", "in_progress", "review", "trash"];
+const BOARD_COLUMN_ORDER: BoardColumnId[] = ["triage", "backlog", "in_progress", "review", "trash"];
 
 export type RequestProgrammaticCardMove = (move: ProgrammaticCardMoveInFlight) => boolean;
 
@@ -380,13 +380,13 @@ export function KanbanBoard({
 						key={column.id}
 						column={column}
 						taskSessions={taskSessions}
-						onCreateTask={column.id === "backlog" ? onCreateTask : undefined}
+						onCreateTask={column.id === "triage" ? onCreateTask : undefined}
 						onStartTask={column.id === "backlog" ? onStartTask : undefined}
 						onStartAllTasks={column.id === "backlog" ? onStartAllTasks : undefined}
 						onClearTrash={column.id === "trash" ? onClearTrash : undefined}
-						editingTaskId={column.id === "backlog" ? editingTaskId : null}
-						inlineTaskEditor={column.id === "backlog" ? inlineTaskEditor : undefined}
-						onEditTask={column.id === "backlog" ? onEditTask : undefined}
+						editingTaskId={column.id === "triage" ? editingTaskId : null}
+						inlineTaskEditor={column.id === "triage" ? inlineTaskEditor : undefined}
+						onEditTask={column.id === "triage" ? onEditTask : undefined}
 						onCommitTask={column.id === "review" ? onCommitTask : undefined}
 						onOpenPrTask={column.id === "review" ? onOpenPrTask : undefined}
 						onCancelAutomaticTaskAction={onCancelAutomaticTaskAction}

@@ -23,7 +23,7 @@ import { resolveProjectInputPath } from "../projects/project-path";
 import { loadWorkspaceContext, mutateWorkspaceState } from "../state/workspace-state";
 import type { RuntimeAppRouter } from "../trpc/app-router";
 
-const LIST_TASK_COLUMNS = ["backlog", "in_progress", "review", "trash"] as const;
+const LIST_TASK_COLUMNS = ["triage", "backlog", "in_progress", "review", "trash"] as const;
 type ListTaskColumn = (typeof LIST_TASK_COLUMNS)[number];
 type TaskCommandTarget = { taskId?: string; column?: ListTaskColumn };
 
@@ -59,7 +59,7 @@ function parseListColumn(value: string | undefined): ListTaskColumn | undefined 
 	if (value === undefined) {
 		return undefined;
 	}
-	if (value === "backlog" || value === "in_progress" || value === "review" || value === "trash") {
+	if (value === "triage" || value === "backlog" || value === "in_progress" || value === "review" || value === "trash") {
 		return value;
 	}
 	throw new Error(`Invalid column "${value}". Expected one of: ${LIST_TASK_COLUMNS.join(", ")}.`);
@@ -167,6 +167,10 @@ async function updateRuntimeWorkspaceState<T>(
 
 function resolveTaskBaseRef(state: RuntimeWorkspaceStateResponse): string {
 	return state.git.currentBranch ?? state.git.defaultBranch ?? state.git.branches[0] ?? "";
+}
+
+function resolveTaskCreateColumnId(board: RuntimeWorkspaceStateResponse["board"]): RuntimeBoardColumnId {
+	return board.columns.some((column) => column.id === "triage") ? "triage" : "backlog";
 }
 
 function findTaskRecord(
@@ -335,9 +339,10 @@ async function createTask(input: {
 		if (!resolvedBaseRef) {
 			throw new Error("Could not determine task base branch for this workspace.");
 		}
+		const targetColumnId = resolveTaskCreateColumnId(state.board);
 		const result = addTaskToColumn(
 			state.board,
-			"backlog",
+			targetColumnId,
 			{
 				prompt: input.prompt,
 				startInPlanMode: input.startInPlanMode,
@@ -349,21 +354,24 @@ async function createTask(input: {
 		);
 		return {
 			board: result.board,
-			value: result.task,
+			value: {
+				task: result.task,
+				columnId: targetColumnId,
+			},
 		};
 	});
 
 	return {
 		ok: true,
 		task: {
-			id: created.id,
-			column: "backlog",
+			id: created.task.id,
+			column: created.columnId,
 			workspacePath: workspaceRepoPath,
-			prompt: created.prompt,
-			baseRef: created.baseRef,
-			startInPlanMode: created.startInPlanMode,
-			autoReviewEnabled: created.autoReviewEnabled === true,
-			autoReviewMode: created.autoReviewMode ?? "commit",
+			prompt: created.task.prompt,
+			baseRef: created.task.baseRef,
+			startInPlanMode: created.task.startInPlanMode,
+			autoReviewEnabled: created.task.autoReviewEnabled === true,
+			autoReviewMode: created.task.autoReviewMode ?? "commit",
 		},
 	};
 }
@@ -915,7 +923,7 @@ export function registerTaskCommand(program: Command): void {
 		.command("list")
 		.description("List Kanban tasks for a workspace.")
 		.option("--project-path <path>", "Workspace path. Defaults to current directory workspace.")
-		.option("--column <column>", "Filter column: backlog | in_progress | review | trash.", parseListColumn)
+		.option("--column <column>", "Filter column: triage | backlog | in_progress | review | trash.", parseListColumn)
 		.action(async (options: { projectPath?: string; column?: ListTaskColumn }) => {
 			await runTaskCommand(
 				async () =>
@@ -929,7 +937,7 @@ export function registerTaskCommand(program: Command): void {
 
 	task
 		.command("create")
-		.description("Create a task in backlog.")
+		.description("Create a task in triage.")
 		.requiredOption("--prompt <text>", "Task prompt text.")
 		.option("--project-path <path>", "Workspace path. Defaults to current directory workspace.")
 		.option("--base-ref <branch>", "Task base branch/ref.")
@@ -1000,7 +1008,7 @@ export function registerTaskCommand(program: Command): void {
 		.command("trash")
 		.description("Move a task or an entire column to trash and clean up task workspaces.")
 		.option("--task-id <id>", "Task ID.")
-		.option("--column <column>", "Column to bulk-trash: backlog | in_progress | review | trash.", parseListColumn)
+		.option("--column <column>", "Column to bulk-trash: triage | backlog | in_progress | review | trash.", parseListColumn)
 		.option("--project-path <path>", "Workspace path. Defaults to current directory workspace.")
 		.action(async (options: { taskId?: string; column?: ListTaskColumn; projectPath?: string }) => {
 			await runTaskCommand(
@@ -1018,7 +1026,7 @@ export function registerTaskCommand(program: Command): void {
 		.command("delete")
 		.description("Permanently delete a task or every task in a column.")
 		.option("--task-id <id>", "Task ID to permanently delete.")
-		.option("--column <column>", "Column to bulk-delete: backlog | in_progress | review | trash.", parseListColumn)
+		.option("--column <column>", "Column to bulk-delete: triage | backlog | in_progress | review | trash.", parseListColumn)
 		.option("--project-path <path>", "Workspace path. Defaults to current directory workspace.")
 		.action(async (options: { taskId?: string; column?: ListTaskColumn; projectPath?: string }) => {
 			await runTaskCommand(

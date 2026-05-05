@@ -180,7 +180,7 @@ Parameters:
 
 ## task create
 
-Purpose: create a new task in \`backlog\`, with optional plan mode and auto-review behavior.
+Purpose: create a new rough task in \`triage\`, with optional plan mode and auto-review behavior. The dispatcher/board manager should triage it, then move clarified executable work to \`backlog\` (Todo).
 
 Command:
 \`${kanbanCommand} task create --prompt "<text>" [--project-path <path>] [--base-ref <branch>] [--start-in-plan-mode <true|false>] [--auto-review-enabled <true|false>] [--auto-review-mode commit|pr|move_to_trash]\`
@@ -275,7 +275,7 @@ Parameters:
 
 ## task start
 
-Purpose: start a task by ensuring its worktree, launching its agent session, and moving it to \`in_progress\`.
+Purpose: start a task from \`backlog\` (Todo) by ensuring its worktree, launching its agent session, and moving it to \`in_progress\`. Triage items should be clarified and moved to Todo first.
 
 Command:
 \`${kanbanCommand} task start --task-id <task_id> [--project-path <path>]\`

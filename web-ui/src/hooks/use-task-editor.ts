@@ -73,6 +73,10 @@ export interface UseTaskEditorResult {
 	resetTaskEditorState: () => void;
 }
 
+function getTaskCreateColumnId(board: BoardData): "triage" | "backlog" {
+	return board.columns.some((column) => column.id === "triage") ? "triage" : "backlog";
+}
+
 export function useTaskEditor({
 	board,
 	setBoard,
@@ -175,7 +179,7 @@ export function useTaskEditor({
 			return;
 		}
 		const selection = findCardSelection(board, editingTaskId);
-		if (!selection || selection.column.id !== "backlog") {
+		if (!selection || (selection.column.id !== "triage" && selection.column.id !== "backlog")) {
 			setEditingTaskId(null);
 			setEditTaskPrompt("");
 			setEditTaskStartInPlanMode(false);
@@ -293,7 +297,7 @@ export function useTaskEditor({
 				return null;
 			}
 			const baseRef = newTaskBranchRef || resolvedDefaultTaskBranchRef;
-			const created = addTaskToColumnWithResult(board, "backlog", {
+			const created = addTaskToColumnWithResult(board, getTaskCreateColumnId(board), {
 				prompt,
 				startInPlanMode: newTaskStartInPlanMode,
 				autoReviewEnabled: newTaskAutoReviewEnabled,
@@ -350,7 +354,7 @@ export function useTaskEditor({
 			const createdTaskIds: string[] = [];
 			let updatedBoard = board;
 			for (const prompt of validPrompts) {
-				const created = addTaskToColumnWithResult(updatedBoard, "backlog", {
+				const created = addTaskToColumnWithResult(updatedBoard, getTaskCreateColumnId(updatedBoard), {
 					prompt,
 					startInPlanMode: newTaskStartInPlanMode,
 					autoReviewEnabled: newTaskAutoReviewEnabled,

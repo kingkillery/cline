@@ -73,7 +73,7 @@ export type RuntimeSlashCommandsResponse = z.infer<typeof runtimeSlashCommandsRe
 export const runtimeAgentIdSchema = z.enum(["claude", "codex", "gemini", "opencode", "droid", "cline"]);
 export type RuntimeAgentId = z.infer<typeof runtimeAgentIdSchema>;
 
-export const runtimeBoardColumnIdSchema = z.enum(["backlog", "in_progress", "review", "trash"]);
+export const runtimeBoardColumnIdSchema = z.enum(["triage", "backlog", "in_progress", "review", "trash"]);
 export type RuntimeBoardColumnId = z.infer<typeof runtimeBoardColumnIdSchema>;
 
 export const runtimeTaskAutoReviewModeSchema = z.enum(["commit", "pr", "move_to_trash"]);
@@ -259,6 +259,7 @@ export const runtimeWorkspaceStateNotifyResponseSchema = z.object({
 export type RuntimeWorkspaceStateNotifyResponse = z.infer<typeof runtimeWorkspaceStateNotifyResponseSchema>;
 
 export const runtimeProjectTaskCountsSchema = z.object({
+	triage: z.number(),
 	backlog: z.number(),
 	in_progress: z.number(),
 	review: z.number(),

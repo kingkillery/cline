@@ -66,7 +66,7 @@ export function BoardColumn({
 	isDependencyLinking?: boolean;
 	workspacePath?: string | null;
 }): React.ReactElement {
-	const canCreate = column.id === "backlog" && onCreateTask;
+	const canCreate = column.id === "triage" && onCreateTask;
 	const canStartAllTasks = column.id === "backlog" && onStartAllTasks;
 	const canClearTrash = column.id === "trash" && onClearTrash;
 	const cardDropType = "CARD";
@@ -148,7 +148,7 @@ export function BoardColumn({
 								const items: ReactNode[] = [];
 								let draggableIndex = 0;
 								for (const card of column.cards) {
-									if (column.id === "backlog" && editingTaskId === card.id) {
+									if (column.id === "triage" && editingTaskId === card.id) {
 										items.push(
 											<div
 												key={card.id}
@@ -184,7 +184,7 @@ export function BoardColumn({
 											isDependencyLinking={isDependencyLinking}
 											workspacePath={workspacePath}
 											onClick={() => {
-												if (column.id === "backlog") {
+												if (column.id === "triage") {
 													onEditTask?.(card);
 													return;
 												}

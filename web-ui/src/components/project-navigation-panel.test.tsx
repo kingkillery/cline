@@ -16,6 +16,7 @@ const PROJECTS: RuntimeProjectSummary[] = [
 		name: "Kanban",
 		path: "/tmp/kanban",
 		taskCounts: {
+			triage: 0,
 			backlog: 0,
 			in_progress: 0,
 			review: 0,

@@ -20,18 +20,24 @@ export interface SearchableTask {
 }
 
 export function countTasksByColumn(board: BoardData): {
+	triage: number;
 	backlog: number;
 	in_progress: number;
 	review: number;
 	trash: number;
 } {
 	const counts = {
+		triage: 0,
 		backlog: 0,
 		in_progress: 0,
 		review: 0,
 		trash: 0,
 	};
 	for (const column of board.columns) {
+		if (column.id === "triage") {
+			counts.triage += column.cards.length;
+			continue;
+		}
 		if (column.id === "backlog") {
 			counts.backlog += column.cards.length;
 			continue;

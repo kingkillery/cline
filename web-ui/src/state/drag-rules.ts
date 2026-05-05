@@ -30,6 +30,9 @@ export function isAllowedCrossColumnCardMove(
 		programmaticCardMoveInFlight?: ProgrammaticCardMoveInFlight | null;
 	},
 ): boolean {
+	if (fromColumnId === "triage" && toColumnId === "backlog") {
+		return true;
+	}
 	if (fromColumnId === "backlog" && toColumnId === "in_progress") {
 		return true;
 	}
@@ -80,7 +83,10 @@ export function isCardDropDisabled(
 		});
 	}
 	if (columnId === "backlog") {
-		return activeDragSourceColumnId !== "backlog";
+		return activeDragSourceColumnId !== "backlog" && activeDragSourceColumnId !== "triage";
+	}
+	if (columnId === "triage") {
+		return activeDragSourceColumnId !== "triage";
 	}
 	if (columnId === "in_progress") {
 		if (activeDragSourceColumnId === "backlog" || activeDragSourceColumnId === "in_progress") {

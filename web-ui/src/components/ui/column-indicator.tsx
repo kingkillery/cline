@@ -7,7 +7,7 @@ export function ColumnIndicator({ columnId, size = 14 }: { columnId: string; siz
 	const cy = size / 2;
 	const strokeWidth = size * 0.15;
 
-	if (columnId === "backlog") {
+	if (columnId === "triage" || columnId === "backlog") {
 		return (
 			<svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
 				<circle cx={cx} cy={cy} r={r} fill="none" stroke={color} strokeWidth={strokeWidth} />

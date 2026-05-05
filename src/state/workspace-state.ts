@@ -32,7 +32,8 @@ const INDEX_VERSION = 1;
 const WORKSPACE_ID_COLLISION_SUFFIX_LENGTH = 4;
 
 const BOARD_COLUMNS: Array<{ id: RuntimeBoardColumnId; title: string }> = [
-	{ id: "backlog", title: "Backlog" },
+	{ id: "triage", title: "Triage" },
+	{ id: "backlog", title: "Todo" },
 	{ id: "in_progress", title: "In Progress" },
 	{ id: "review", title: "Review" },
 	{ id: "trash", title: "Trash" },
