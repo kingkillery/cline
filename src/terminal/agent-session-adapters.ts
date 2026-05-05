@@ -1328,6 +1328,63 @@ const clineAdapter: AgentSessionAdapter = {
 	},
 };
 
+const copilotAdapter: AgentSessionAdapter = {
+	async prepare(input) {
+		const args = [...input.args];
+		const env: Record<string, string | undefined> = {};
+
+		if (input.autonomousModeEnabled && !hasCliOption(args, "--auto-approve")) {
+			args.push("--auto-approve");
+		}
+
+		if (input.resumeFromTrash && !hasCliOption(args, "--continue")) {
+			args.push("--continue");
+		}
+
+		if (input.startInPlanMode) {
+			args.push("--plan");
+		}
+
+		const hooks = resolveHookContext(input);
+		if (hooks) {
+			const hooksDir = getHookAgentDirectory("copilot");
+			const notificationHookPath = getClineHookScriptPath(hooksDir, "Notification");
+			const taskCompleteHookPath = getClineHookScriptPath(hooksDir, "TaskComplete");
+			const userPromptSubmitHookPath = getClineHookScriptPath(hooksDir, "UserPromptSubmit");
+			const preToolUseHookPath = getClineHookScriptPath(hooksDir, "PreToolUse");
+			const postToolUseHookPath = getClineHookScriptPath(hooksDir, "PostToolUse");
+			const executable = process.platform !== "win32";
+
+			await ensureTextFile(notificationHookPath, buildClineNotificationHookScriptContent(), executable);
+			await ensureTextFile(taskCompleteHookPath, buildClineHookScriptContent("to_review"), executable);
+			await ensureTextFile(userPromptSubmitHookPath, buildClineHookScriptContent("to_in_progress"), executable);
+			await ensureTextFile(preToolUseHookPath, buildClinePreToolUseHookScriptContent(), executable);
+			await ensureTextFile(postToolUseHookPath, buildClinePostToolUseHookScriptContent(), executable);
+
+			if (!hasCliOption(args, "--hooks-dir")) {
+				args.push("--hooks-dir", hooksDir);
+			}
+
+			Object.assign(
+				env,
+				createHookRuntimeEnv({
+					taskId: hooks.taskId,
+					workspaceId: hooks.workspaceId,
+				}),
+			);
+		}
+
+		const withPromptLaunch = withPrompt(args, input.prompt, "append");
+		return {
+			...withPromptLaunch,
+			env: {
+				...withPromptLaunch.env,
+				...env,
+			},
+		};
+	},
+};
+
 const ADAPTERS: Record<RuntimeAgentId, AgentSessionAdapter> = {
 	claude: claudeAdapter,
 	codex: codexAdapter,
@@ -1335,6 +1392,7 @@ const ADAPTERS: Record<RuntimeAgentId, AgentSessionAdapter> = {
 	opencode: opencodeAdapter,
 	droid: droidAdapter,
 	cline: clineAdapter,
+	copilot: copilotAdapter,
 };
 
 export async function prepareAgentLaunch(input: AgentAdapterLaunchInput): Promise<PreparedAgentLaunch> {

@@ -15,6 +15,22 @@ function createNoopMcpRuntimeService() {
 	};
 }
 
+function createTrackedMcpRuntimeService() {
+	const dispose = vi.fn(async () => {});
+	return {
+		dispose,
+		service: {
+			createToolBundle: vi.fn(async () => ({
+				tools: [],
+				warnings: [],
+				dispose,
+			})),
+			getAuthStatuses: vi.fn(async () => []),
+			authorizeServer: vi.fn(),
+		},
+	};
+}
+
 function createDeferred<T>() {
 	let resolve: (value: T) => void = () => {};
 	let reject: (error: unknown) => void = () => {};
@@ -327,6 +343,54 @@ describe("InMemoryClineSessionRuntime", () => {
 		);
 	});
 
+	it("rebuilds restart config from a resumed persisted session record", async () => {
+		const persistedRecord = createPersistedRecord({
+			sessionId: "task-1-persisted",
+			status: "running",
+			startedAt: "2026-03-17T10:00:00.000Z",
+			updatedAt: "2026-03-17T10:05:00.000Z",
+		});
+		const fakeHost = {
+			start: vi.fn(async (input: { config?: { sessionId?: string } }) => ({
+				sessionId: input.config?.sessionId ?? "session-1",
+				result: {},
+			})),
+			send: vi.fn(async () => undefined),
+			stop: vi.fn(async () => {}),
+			abort: vi.fn(async () => {}),
+			delete: vi.fn(async () => true),
+			dispose: vi.fn(async () => {}),
+			get: vi.fn(async () => undefined),
+			list: vi.fn(async () => [persistedRecord]),
+			readMessages: vi.fn(async () => [{ role: "user" as const, content: "Previous prompt" }]),
+			subscribe: vi.fn(() => () => {}),
+		};
+
+		const runtime = createInMemoryClineSessionRuntime({
+			createSessionHost: async () => fakeHost,
+			createMcpRuntimeService: createNoopMcpRuntimeService,
+		});
+
+		await runtime.resumeTaskSession("task-1");
+		await runtime.restartTaskSession({
+			taskId: "task-1",
+			prompt: "Continue after process restart",
+			initialMessages: [{ role: "user", content: "Previous prompt" }],
+		});
+
+		expect(fakeHost.start).toHaveBeenCalledWith(
+			expect.objectContaining({
+				initialMessages: [{ role: "user", content: "Previous prompt" }],
+				prompt: "Continue after process restart",
+				config: expect.objectContaining({
+					cwd: "/tmp/worktree",
+					providerId: "anthropic",
+					modelId: "claude-sonnet-4-6",
+				}),
+			}),
+		);
+	});
+
 	it("uses filesystem-safe session ids when task ids include windows-invalid characters", async () => {
 		let requestedSessionId: string | null = null;
 		const fakeHost = {
@@ -399,6 +463,142 @@ describe("InMemoryClineSessionRuntime", () => {
 			}),
 		).rejects.toThrow("Maximum consecutive mistakes reached.");
 
+		expect(runtime.getTaskSessionId("task-1")).toBeNull();
+	});
+
+	it("releases the MCP tool bundle when session host creation fails", async () => {
+		const trackedMcp = createTrackedMcpRuntimeService();
+		const runtime = createInMemoryClineSessionRuntime({
+			createSessionHost: async () => {
+				throw new Error("host unavailable");
+			},
+			createMcpRuntimeService: () => trackedMcp.service,
+		});
+
+		await expect(
+			runtime.startTaskSession({
+				taskId: "task-1",
+				cwd: "/tmp/worktree",
+				prompt: "Investigate startup",
+				providerId: "anthropic",
+				modelId: "claude-sonnet-4-6",
+				systemPrompt: "You are a helpful coding assistant.",
+			}),
+		).rejects.toThrow("host unavailable");
+
+		expect(trackedMcp.dispose).toHaveBeenCalledTimes(1);
+		expect(runtime.getTaskSessionId("task-1")).toBeNull();
+	});
+
+	it("releases the MCP tool bundle when stopping a session rejects", async () => {
+		const trackedMcp = createTrackedMcpRuntimeService();
+		const fakeHost = {
+			start: vi.fn(async (input: { config?: { sessionId?: string } }) => ({
+				sessionId: input.config?.sessionId ?? "session-1",
+				result: {},
+			})),
+			send: vi.fn(async () => ({})),
+			stop: vi.fn(async () => {
+				throw new Error("stop failed");
+			}),
+			abort: vi.fn(async () => {}),
+			delete: vi.fn(async () => true),
+			dispose: vi.fn(async () => {}),
+			get: vi.fn(async () => undefined),
+			list: vi.fn(async () => []),
+			readMessages: vi.fn(async () => []),
+			subscribe: vi.fn(() => () => {}),
+		};
+		const runtime = createInMemoryClineSessionRuntime({
+			createSessionHost: async () => fakeHost,
+			createMcpRuntimeService: () => trackedMcp.service,
+		});
+
+		await runtime.startTaskSession({
+			taskId: "task-1",
+			cwd: "/tmp/worktree",
+			prompt: "Investigate startup",
+			providerId: "anthropic",
+			modelId: "claude-sonnet-4-6",
+			systemPrompt: "You are a helpful coding assistant.",
+		});
+		await expect(runtime.stopTaskSession("task-1")).rejects.toThrow("stop failed");
+
+		expect(trackedMcp.dispose).toHaveBeenCalledTimes(1);
+	});
+
+	it("releases the MCP tool bundle when aborting a session rejects", async () => {
+		const trackedMcp = createTrackedMcpRuntimeService();
+		const fakeHost = {
+			start: vi.fn(async (input: { config?: { sessionId?: string } }) => ({
+				sessionId: input.config?.sessionId ?? "session-1",
+				result: {},
+			})),
+			send: vi.fn(async () => ({})),
+			stop: vi.fn(async () => {}),
+			abort: vi.fn(async () => {
+				throw new Error("abort failed");
+			}),
+			delete: vi.fn(async () => true),
+			dispose: vi.fn(async () => {}),
+			get: vi.fn(async () => undefined),
+			list: vi.fn(async () => []),
+			readMessages: vi.fn(async () => []),
+			subscribe: vi.fn(() => () => {}),
+		};
+		const runtime = createInMemoryClineSessionRuntime({
+			createSessionHost: async () => fakeHost,
+			createMcpRuntimeService: () => trackedMcp.service,
+		});
+
+		await runtime.startTaskSession({
+			taskId: "task-1",
+			cwd: "/tmp/worktree",
+			prompt: "Investigate startup",
+			providerId: "anthropic",
+			modelId: "claude-sonnet-4-6",
+			systemPrompt: "You are a helpful coding assistant.",
+		});
+		await expect(runtime.abortTaskSession("task-1")).rejects.toThrow("abort failed");
+
+		expect(trackedMcp.dispose).toHaveBeenCalledTimes(1);
+	});
+
+	it("releases the MCP tool bundle when clearing sessions fails before deleting", async () => {
+		const trackedMcp = createTrackedMcpRuntimeService();
+		const fakeHost = {
+			start: vi.fn(async (input: { config?: { sessionId?: string } }) => ({
+				sessionId: input.config?.sessionId ?? "session-1",
+				result: {},
+			})),
+			send: vi.fn(async () => ({})),
+			stop: vi.fn(async () => {}),
+			abort: vi.fn(async () => {}),
+			delete: vi.fn(async () => true),
+			dispose: vi.fn(async () => {}),
+			get: vi.fn(async () => undefined),
+			list: vi.fn(async () => {
+				throw new Error("list failed");
+			}),
+			readMessages: vi.fn(async () => []),
+			subscribe: vi.fn(() => () => {}),
+		};
+		const runtime = createInMemoryClineSessionRuntime({
+			createSessionHost: async () => fakeHost,
+			createMcpRuntimeService: () => trackedMcp.service,
+		});
+
+		await runtime.startTaskSession({
+			taskId: "task-1",
+			cwd: "/tmp/worktree",
+			prompt: "Investigate startup",
+			providerId: "anthropic",
+			modelId: "claude-sonnet-4-6",
+			systemPrompt: "You are a helpful coding assistant.",
+		});
+		await expect(runtime.clearTaskSessions("task-1")).rejects.toThrow("list failed");
+
+		expect(trackedMcp.dispose).toHaveBeenCalledTimes(1);
 		expect(runtime.getTaskSessionId("task-1")).toBeNull();
 	});
 

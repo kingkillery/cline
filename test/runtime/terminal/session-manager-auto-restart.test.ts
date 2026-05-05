@@ -49,7 +49,7 @@ describe("TerminalSessionManager auto-restart", () => {
 		}));
 	});
 
-	it("restarts an attached agent session after it exits", async () => {
+	it("restarts an attached agent session after it exits abnormally", async () => {
 		const spawnedSessions: Array<ReturnType<typeof createMockPtySession>> = [];
 		ptySessionSpawnMock.mockImplementation((request: MockSpawnRequest) => {
 			const session = createMockPtySession(spawnedSessions.length === 0 ? 111 : 222, request);
@@ -81,6 +81,40 @@ describe("TerminalSessionManager auto-restart", () => {
 		});
 		expect(manager.getSummary("task-1")?.state).toBe("running");
 		expect(manager.getSummary("task-1")?.pid).toBe(222);
+	});
+
+	it("does not restart an attached agent session after it exits cleanly", async () => {
+		const spawnedSessions: Array<ReturnType<typeof createMockPtySession>> = [];
+		ptySessionSpawnMock.mockImplementation((request: MockSpawnRequest) => {
+			const session = createMockPtySession(111, request);
+			spawnedSessions.push(session);
+			return session;
+		});
+
+		const manager = new TerminalSessionManager();
+		manager.attach("task-1", {
+			onState: vi.fn(),
+			onOutput: vi.fn(),
+			onExit: vi.fn(),
+		});
+
+		await manager.startTaskSession({
+			taskId: "task-1",
+			agentId: "codex",
+			binary: "codex",
+			args: [],
+			cwd: "/tmp/task-1",
+			prompt: "Fix the bug",
+		});
+
+		spawnedSessions[0]?.triggerExit(0);
+		await Promise.resolve();
+		await Promise.resolve();
+
+		expect(ptySessionSpawnMock).toHaveBeenCalledTimes(1);
+		expect(manager.getSummary("task-1")?.state).toBe("awaiting_review");
+		expect(manager.getSummary("task-1")?.reviewReason).toBe("exit");
+		expect(manager.getSummary("task-1")?.pid).toBeNull();
 	});
 
 	it("does not restart an attached agent session after an explicit stop", async () => {

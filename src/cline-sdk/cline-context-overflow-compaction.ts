@@ -33,6 +33,10 @@ const CONTEXT_OVERFLOW_ERROR_PATTERNS = [
 ];
 const CONTEXT_COMPACTION_PREVIEW_CHARS = 300;
 
+type ClineSdkContentBlock = Exclude<ClineSdkPersistedMessage["content"], string>[number];
+type ClineSdkToolResultBlock = Extract<ClineSdkContentBlock, { type: "tool_result" }>;
+type ClineSdkToolResultNestedBlock = Exclude<ClineSdkToolResultBlock["content"], string>[number];
+
 export function isContextOverflowError(error: unknown): boolean {
 	if (!(error instanceof Error)) {
 		return false;
@@ -40,34 +44,41 @@ export function isContextOverflowError(error: unknown): boolean {
 	return CONTEXT_OVERFLOW_ERROR_PATTERNS.some((pattern) => pattern.test(error.message));
 }
 
-function readMessagePreview(message: ClineSdkPersistedMessage): string {
-	const rawText =
-		typeof message.content === "string"
-			? message.content
-			: message.content
-					.map((block) => {
-						if (block.type === "text") {
-							return block.text;
-						}
-						if (block.type === "file") {
-							return block.path;
-						}
-						if (block.type === "tool_use") {
-							return `${block.name} ${JSON.stringify(block.input)}`;
-						}
-						if (block.type === "tool_result") {
-							return typeof block.content === "string" ? block.content : "[tool_result]";
-						}
-						if (block.type === "thinking") {
-							return block.thinking;
-						}
-						if (block.type === "redacted_thinking") {
-							return "[redacted_thinking]";
-						}
-						return "[image]";
-					})
-					.join(" ");
+function renderNestedToolResultPreview(block: ClineSdkToolResultNestedBlock): string {
+	if (block.type === "text") {
+		return block.text;
+	}
+	if (block.type === "file") {
+		return block.path;
+	}
+	return "[image]";
+}
 
+function renderContentBlockPreview(block: ClineSdkContentBlock): string {
+	if (block.type === "text") {
+		return block.text;
+	}
+	if (block.type === "file") {
+		return block.path;
+	}
+	if (block.type === "tool_use") {
+		return `${block.name} ${JSON.stringify(block.input)}`;
+	}
+	if (block.type === "tool_result") {
+		return typeof block.content === "string"
+			? block.content
+			: block.content.map(renderNestedToolResultPreview).join(" ");
+	}
+	if (block.type === "thinking") {
+		return block.thinking;
+	}
+	if (block.type === "redacted_thinking") {
+		return "[redacted_thinking]";
+	}
+	return "[image]";
+}
+
+function normalizePreview(rawText: string): string {
 	const normalized = rawText.replace(/\s+/g, " ").trim();
 	if (!normalized) {
 		return "(empty)";
@@ -76,6 +87,30 @@ function readMessagePreview(message: ClineSdkPersistedMessage): string {
 		return normalized;
 	}
 	return `${normalized.slice(0, CONTEXT_COMPACTION_PREVIEW_CHARS)}...`;
+}
+
+function readMessagePreview(message: ClineSdkPersistedMessage): string {
+	const rawText =
+		typeof message.content === "string" ? message.content : message.content.map(renderContentBlockPreview).join(" ");
+	return normalizePreview(rawText);
+}
+
+function stripOrphanedFirstMessageToolResults(message: ClineSdkPersistedMessage): ClineSdkPersistedMessage {
+	if (typeof message.content === "string") {
+		return message;
+	}
+	return {
+		...message,
+		content: message.content.map((block) => {
+			if (block.type !== "tool_result") {
+				return block;
+			}
+			return {
+				type: "text",
+				text: `[Earlier tool result omitted during context compaction: ${block.tool_use_id}]`,
+			};
+		}),
+	};
 }
 
 function prependCompactionNotice(
@@ -116,7 +151,8 @@ export function compactPersistedMessagesForContextOverflow(
 		return null;
 	}
 
-	const rewrittenFirstMessage = prependCompactionNotice(retained[0], firstUserMessagePreview);
+	const safeRestartMessage = stripOrphanedFirstMessageToolResults(retained[0]);
+	const rewrittenFirstMessage = prependCompactionNotice(safeRestartMessage, firstUserMessagePreview);
 	const compactedMessages = [rewrittenFirstMessage, ...retained.slice(1)];
 	if (compactedMessages.length >= messages.length) {
 		return null;

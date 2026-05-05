@@ -123,6 +123,7 @@ function createDefaultSummary(taskId: string): RuntimeTaskSessionSummary {
 		warningMessage: null,
 		latestTurnCheckpoint: null,
 		previousTurnCheckpoint: null,
+		handoff: null,
 	};
 }
 
@@ -986,6 +987,9 @@ export class TerminalSessionManager implements TerminalSessionService {
 			return false;
 		}
 		if (entry.listeners.size === 0 || entry.restartRequest?.kind !== "task") {
+			return false;
+		}
+		if (entry.summary.exitCode === 0 && entry.summary.reviewReason === "exit") {
 			return false;
 		}
 		const currentTime = now();

@@ -23,6 +23,8 @@ function applyEvent(input: {
 	entry?: ClineTaskSessionEntry;
 	event: unknown;
 	pendingTurnCancelTaskIds?: Set<string>;
+	providerId?: string | null;
+	modelId?: string | null;
 }) {
 	const taskId = input.taskId ?? "task-1";
 	const entry = input.entry ?? createEntry(taskId);
@@ -35,6 +37,8 @@ function applyEvent(input: {
 		taskId,
 		entry,
 		pendingTurnCancelTaskIds,
+		providerId: input.providerId,
+		modelId: input.modelId,
 		emitSummary: (summary) => {
 			summaries.push(summary);
 		},
@@ -295,6 +299,51 @@ describe("applyClineSessionEvent", () => {
 		expect(result.messages[0]?.content).toBe("Done. Added the comment.");
 	});
 
+	it("extracts structured handoff metadata from completed Cline final messages", () => {
+		const entry = createEntry("task-1");
+		entry.summary.state = "running";
+
+		const finalText = [
+			"Implemented the change.",
+			"",
+			"```json",
+			"{",
+			'  "task_handoff": {',
+			'    "changed_files": ["src/example.ts"],',
+			'    "decisions": ["Kept the parser strict"],',
+			'    "tests_run": ["npm test -- cline-event-adapter"],',
+			'    "errors": [],',
+			'    "review_status": "unknown"',
+			"  }",
+			"}",
+			"```",
+		].join("\n");
+
+		const result = applyEvent({
+			entry,
+			event: {
+				type: "agent_event",
+				payload: {
+					sessionId: "session-1",
+					event: {
+						type: "done",
+						reason: "completed",
+						text: finalText,
+					},
+				},
+			},
+		});
+
+		expect(result.entry.summary.state).toBe("awaiting_review");
+		expect(result.entry.summary.handoff).toEqual({
+			changed_files: ["src/example.ts"],
+			decisions: ["Kept the parser strict"],
+			tests_run: ["npm test -- cline-event-adapter"],
+			errors: [],
+			review_status: "unknown",
+		});
+	});
+
 	it("keeps the previous preview when done events have no final text", () => {
 		const entry = createEntry("task-1");
 		entry.summary.state = "running";
@@ -349,6 +398,47 @@ describe("applyClineSessionEvent", () => {
 		expect(result.entry.summary.state).toBe("awaiting_review");
 		expect(result.entry.summary.reviewReason).toBe("attention");
 		expect(result.summaries.at(-1)?.state).toBe("awaiting_review");
+	});
+
+	it("settles running summaries when SDK status turns completed without a done event", () => {
+		const entry = createEntry("task-1");
+		entry.summary.state = "running";
+		entry.activeAssistantMessageId = "assistant-1";
+
+		const result = applyEvent({
+			entry,
+			event: {
+				type: "status",
+				payload: {
+					sessionId: "session-1",
+					status: "completed",
+				},
+			},
+		});
+
+		expect(result.entry.summary.state).toBe("awaiting_review");
+		expect(result.entry.summary.reviewReason).toBe("exit");
+		expect(result.entry.activeAssistantMessageId).toBeNull();
+	});
+
+	it("does not regress terminal summaries when stale running status arrives", () => {
+		const entry = createEntry("task-1");
+		entry.summary.state = "interrupted";
+		entry.summary.reviewReason = "interrupted";
+
+		const result = applyEvent({
+			entry,
+			event: {
+				type: "status",
+				payload: {
+					sessionId: "session-1",
+					status: "running",
+				},
+			},
+		});
+
+		expect(result.entry.summary.state).toBe("interrupted");
+		expect(result.entry.summary.reviewReason).toBe("interrupted");
 	});
 
 	it("surfaces recoverable agent errors in the summary without failing the task", () => {
@@ -406,6 +496,132 @@ describe("applyClineSessionEvent", () => {
 		expect(result.entry.summary.warningMessage).toBeNull();
 		expect(result.entry.summary.latestHookActivity?.notificationType).toBe("credit_limit");
 		expect(result.messages).toHaveLength(0);
+	});
+
+	it("surfaces OpenAI Codex OAuth expiry with a re-login recovery notice", () => {
+		const entry = createEntry("task-1");
+		entry.summary.state = "running";
+
+		const result = applyEvent({
+			entry,
+			event: {
+				type: "agent_event",
+				payload: {
+					sessionId: "session-1",
+					event: {
+						type: "error",
+						error: new Error("OpenAI Codex refresh token expired; OAuth refresh failed with 401"),
+						recoverable: false,
+						iteration: 1,
+					},
+				},
+			},
+		});
+
+		expect(result.entry.summary.state).toBe("awaiting_review");
+		expect(result.entry.summary.warningMessage).toContain("OpenAI Codex authentication expired");
+		expect(result.entry.summary.warningMessage).toContain("reconnect OpenAI Codex");
+		expect(result.entry.summary.latestHookActivity?.notificationType).toBe("codex_oauth_relogin");
+	});
+
+	it("uses provider context to classify ambiguous Codex rate-limit errors", () => {
+		const entry = createEntry("task-1");
+		entry.summary.state = "running";
+
+		const result = applyEvent({
+			entry,
+			providerId: "openai-codex",
+			event: {
+				type: "agent_event",
+				payload: {
+					sessionId: "session-1",
+					event: {
+						type: "error",
+						error: new Error("429 Too Many Requests"),
+						recoverable: true,
+						iteration: 1,
+					},
+				},
+			},
+		});
+
+		expect(result.entry.summary.state).toBe("awaiting_review");
+		expect(result.entry.summary.warningMessage).toContain("OpenAI Codex is rate-limiting");
+		expect(result.entry.summary.latestHookActivity?.notificationType).toBe("codex_rate_limit");
+	});
+
+	it("uses model context to classify Claude model availability errors", () => {
+		const entry = createEntry("task-1");
+		entry.summary.state = "running";
+
+		const result = applyEvent({
+			entry,
+			providerId: "anthropic",
+			modelId: "claude-sonnet-4",
+			event: {
+				type: "agent_event",
+				payload: {
+					sessionId: "session-1",
+					event: {
+						type: "error",
+						error: new Error("model not accessible on this account tier"),
+						recoverable: false,
+						iteration: 1,
+					},
+				},
+			},
+		});
+
+		expect(result.entry.summary.warningMessage).toContain("not available for this Anthropic account");
+		expect(result.entry.summary.latestHookActivity?.notificationType).toBe("anthropic_model_unavailable");
+	});
+
+	it("surfaces Anthropic API key failures with ANTHROPIC_API_KEY guidance", () => {
+		const entry = createEntry("task-1");
+		entry.summary.state = "running";
+
+		const result = applyEvent({
+			entry,
+			event: {
+				type: "agent_event",
+				payload: {
+					sessionId: "session-1",
+					event: {
+						type: "error",
+						error: new Error("Anthropic API error 401 unauthorized: invalid x-api-key"),
+						recoverable: false,
+						iteration: 1,
+					},
+				},
+			},
+		});
+
+		expect(result.entry.summary.warningMessage).toContain("ANTHROPIC_API_KEY");
+		expect(result.entry.summary.latestHookActivity?.notificationType).toBe("anthropic_auth");
+	});
+
+	it("surfaces GitHub Copilot token failures with gh auth login guidance", () => {
+		const entry = createEntry("task-1");
+		entry.summary.state = "running";
+
+		const result = applyEvent({
+			entry,
+			event: {
+				type: "agent_event",
+				payload: {
+					sessionId: "session-1",
+					event: {
+						type: "error",
+						error: new Error("GitHub Copilot token expired; gh auth token returned empty"),
+						recoverable: false,
+						iteration: 1,
+					},
+				},
+			},
+		});
+
+		expect(result.entry.summary.warningMessage).toContain("gh auth login");
+		expect(result.entry.summary.latestHookActivity?.notificationType).toBe("copilot_auth");
 	});
 
 	it("preserves credit-limit metadata when a later done event closes the turn", () => {

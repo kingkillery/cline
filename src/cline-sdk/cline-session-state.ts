@@ -71,6 +71,7 @@ export function createDefaultSummary(taskId: string): RuntimeTaskSessionSummary 
 		warningMessage: null,
 		latestTurnCheckpoint: null,
 		previousTurnCheckpoint: null,
+		handoff: null,
 	};
 }
 

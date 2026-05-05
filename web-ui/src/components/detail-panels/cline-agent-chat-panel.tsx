@@ -38,6 +38,54 @@ import type { TaskImage } from "@/types";
 const BOTTOM_LOCK_THRESHOLD_PX = 24;
 const CLINE_BUY_CREDITS_URL = "https://app.cline.bot/";
 
+interface ProviderRecoveryNoticeCopy {
+	title: string;
+	action: string;
+	href?: string;
+	linkText?: string;
+}
+
+const PROVIDER_RECOVERY_NOTICE_BY_TYPE: Record<string, ProviderRecoveryNoticeCopy> = {
+	credit_limit: {
+		title: "Out of Cline credits.",
+		action: "to continue.",
+		href: CLINE_BUY_CREDITS_URL,
+		linkText: "Buy more credits",
+	},
+	codex_credit_limit: {
+		title: "OpenAI Codex credits are exhausted.",
+		action: "Add credits or switch providers before retrying.",
+	},
+	codex_oauth_relogin: {
+		title: "OpenAI Codex authentication expired.",
+		action: "Reconnect OpenAI Codex in Cline settings, then retry.",
+	},
+	codex_rate_limit: {
+		title: "OpenAI Codex is rate-limiting requests.",
+		action: "Wait for the retry window or switch providers before retrying.",
+	},
+	anthropic_auth: {
+		title: "Anthropic rejected the request.",
+		action: "Check ANTHROPIC_API_KEY or reconnect Anthropic before retrying.",
+	},
+	anthropic_rate_limit: {
+		title: "Anthropic is rate-limiting requests.",
+		action: "Wait for the rate-limit window or choose a different provider.",
+	},
+	anthropic_model_unavailable: {
+		title: "The selected Claude model is unavailable.",
+		action: "Choose an accessible Claude model, then retry.",
+	},
+	copilot_auth: {
+		title: "GitHub Copilot authentication is missing or expired.",
+		action: "Run `gh auth login`, confirm `gh auth token` returns a token, then retry.",
+	},
+	copilot_rate_limit: {
+		title: "GitHub Copilot request limits were reached.",
+		action: "Wait for quota reset or switch providers before retrying.",
+	},
+};
+
 const ThinkingShimmer = React.memo(function ThinkingShimmer() {
 	return (
 		<div className="px-1.5">
@@ -53,21 +101,24 @@ const ThinkingShimmer = React.memo(function ThinkingShimmer() {
 	);
 });
 
-const ClineCreditLimitNotice = React.memo(function ClineCreditLimitNotice() {
+const ProviderRecoveryNotice = React.memo(function ProviderRecoveryNotice({ copy }: { copy: ProviderRecoveryNoticeCopy }) {
 	return (
 		<div className="mx-1 flex items-start gap-2 rounded-md border border-status-orange/40 bg-status-orange/10 px-3 py-2 text-xs text-status-orange">
 			<AlertTriangle size={14} className="mt-0.5 shrink-0" />
 			<p className="m-0 min-w-0">
-				Out of Cline credits.{" "}
-				<a
-					href={CLINE_BUY_CREDITS_URL}
-					target="_blank"
-					rel="noreferrer"
-					className="text-accent underline-offset-2 hover:text-accent-hover hover:underline"
-				>
-					Buy more credits
-				</a>{" "}
-				to continue.
+				{copy.title} {copy.href && copy.linkText ? (
+					<>
+						<a
+							href={copy.href}
+							target="_blank"
+							rel="noreferrer"
+							className="text-accent underline-offset-2 hover:text-accent-hover hover:underline"
+						>
+							{copy.linkText}
+						</a>{" "}
+					</>
+				) : null}
+				{copy.action}
 			</p>
 		</div>
 	);
@@ -176,7 +227,6 @@ export const ClineAgentChatPanel = React.forwardRef<ClineAgentChatPanelHandle, C
 		const [composerError, setComposerError] = useState<string | null>(null);
 		const [isAutoScrollEnabled, setIsAutoScrollEnabled] = useState(true);
 		const [isSavingModel, setIsSavingModel] = useState(false);
-		const [isCreditLimitNoticeVisible, setIsCreditLimitNoticeVisible] = useState(false);
 		const [mode, setMode] = useState<RuntimeTaskSessionMode>(() => {
 			const persistedMode = modeByTaskIdRef.current.get(taskId);
 			return persistedMode ?? summary?.mode ?? defaultMode;
@@ -230,6 +280,10 @@ export const ClineAgentChatPanel = React.forwardRef<ClineAgentChatPanelHandle, C
 		]);
 
 		const panelError = composerError ?? error;
+		const providerRecoveryNoticeCopy =
+			summary?.latestHookActivity?.notificationType
+				? (PROVIDER_RECOVERY_NOTICE_BY_TYPE[summary.latestHookActivity.notificationType] ?? null)
+				: null;
 		const attachmentWarningMessage =
 			draftImages.length > 0 && selectedModel?.supportsVision === false
 				? "The selected Cline model may not accept image input. Choose a vision-capable model to use these images."
@@ -274,9 +328,6 @@ export const ClineAgentChatPanel = React.forwardRef<ClineAgentChatPanelHandle, C
 			setIsAutoScrollEnabled(true);
 		}, [taskId]);
 
-		useEffect(() => {
-			setIsCreditLimitNoticeVisible(false);
-		}, [taskId]);
 
 		useEffect(() => {
 			const persistedMode = modeByTaskIdRef.current.get(taskId);
@@ -286,10 +337,6 @@ export const ClineAgentChatPanel = React.forwardRef<ClineAgentChatPanelHandle, C
 			setDraftImages([]);
 		}, [defaultMode, summary?.mode, taskId]);
 
-		useEffect(() => {
-			const isCreditLimitError = summary?.latestHookActivity?.notificationType === "credit_limit";
-			setIsCreditLimitNoticeVisible(isCreditLimitError);
-		}, [summary?.latestHookActivity?.notificationType]);
 
 		const handleModeChange = useCallback(
 			(nextMode: RuntimeTaskSessionMode) => {
@@ -436,7 +483,7 @@ export const ClineAgentChatPanel = React.forwardRef<ClineAgentChatPanelHandle, C
 						<ClineChatMessageItem key={message.id} message={message} />
 					))}
 					{showAgentProgressIndicator ? <ThinkingShimmer /> : null}
-					{isCreditLimitNoticeVisible ? <ClineCreditLimitNotice /> : null}
+					{providerRecoveryNoticeCopy ? <ProviderRecoveryNotice copy={providerRecoveryNoticeCopy} /> : null}
 				</div>
 				{panelError ? (
 					<div className="border-t border-status-red/30 bg-status-red/10 px-2 py-2 text-xs text-status-red">

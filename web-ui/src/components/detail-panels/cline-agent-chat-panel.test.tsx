@@ -239,6 +239,35 @@ describe("ClineAgentChatPanel", () => {
 		expect(container.textContent).toContain("Out of Cline credits.");
 	});
 
+	it("renders provider-specific recovery notices for authentication failures", async () => {
+		await act(async () => {
+			renderPanel(
+				root,
+				<ClineAgentChatPanel
+					taskId="task-1"
+					summary={createSummary(
+						"awaiting_review",
+						{
+							activityText: "Agent error: OpenAI Codex authentication expired",
+							toolName: null,
+							toolInputSummary: null,
+							finalMessage: "OpenAI Codex authentication expired; reconnect OpenAI Codex in Cline settings.",
+							hookEventName: "agent_error",
+							notificationType: "codex_oauth_relogin",
+							source: "cline-sdk",
+						},
+						{ reviewReason: "error" },
+					)}
+					onLoadMessages={async () => []}
+				/>,
+			);
+			await Promise.resolve();
+		});
+
+		expect(container.textContent).toContain("OpenAI Codex authentication expired");
+		expect(container.textContent).toContain("Reconnect OpenAI Codex");
+	});
+
 	it("shows out-of-credits notice after interrupted state when credit-limit metadata persists", async () => {
 		await act(async () => {
 			renderPanel(

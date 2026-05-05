@@ -34,7 +34,7 @@ The current cleanup assumes:
 
 ## Current Overall Status
 
-Status: In progress
+Status: Phase 6 conditional release candidate; Cline SDK/runtime API/task-session/chat UI targeted suites and root/web typechecks are green, but full backend and web suites are not green.
 
 Current recommended phase:
 
@@ -42,7 +42,7 @@ Current recommended phase:
 
 Current recommended first task:
 
-- continue Phase 6 with broader verification and a deletion pass for any leftover prototype-only helpers that are no longer used
+- decide whether to accept the documented full-suite failures as pre-existing/environmental release exceptions; if not, create targeted follow-up triage for backend runtime server-start/CLI timeout leaks, task-worktree timeout cases, and web-ui Featurebase/Vitest worker startup timeouts
 
 ## Phase Tracker
 
@@ -111,7 +111,7 @@ Exit conditions:
 
 ### Phase 6: Hardening and deletion pass
 
-Status: In progress
+Status: Conditional release candidate; prior Phase 6 blocker fixes verified, with unrelated full-suite failures still open unless accepted as release exceptions
 
 Definition:
 
@@ -177,13 +177,13 @@ New files added or still expected:
 Keep this checklist updated as phases complete.
 
 - [ ] Cline detail view starts and continues native chat sessions
-- [ ] Cline home sidebar works across project switches
-- [ ] provider catalog and model selection work
-- [ ] OAuth login works
+- [x] Cline home sidebar works across project switches
+- [x] provider catalog and model selection work
+- [x] OAuth login works
 - [ ] non Cline task sessions still launch in PTY terminals
 - [ ] shell terminal still works
-- [x] full backend tests pass
-- [x] full web tests pass
+- [ ] full backend tests pass — latest full `npm test` failed in runtime server-start timeout suites plus CLI/task-worktree/git-history timeout cases; focused Cline SDK/runtime API regressions pass
+- [ ] full web tests pass — latest full web suite failed before executing tests because Vitest fork workers timed out; focused Cline chat UI regressions pass, but Featurebase hook worker startup still times out
 - [x] browser smoke tests pass
 - [x] lint passes
 - [x] typecheck passes
@@ -191,6 +191,100 @@ Keep this checklist updated as phases complete.
 ## Session Log
 
 Add newest entries at the top.
+
+### Entry 15
+
+Date:
+
+- 2026-05-05 — Phase 6 validation confirmation rerun from reclaimed Kanban task
+
+State:
+
+- confirmed the prior Entry 14 classification after the worker was reclaimed: targeted Cline SDK/runtime API/task-session coverage, targeted Cline chat UI coverage, and both TypeScript typechecks are green
+- expanded the targeted backend confirmation to include Cline MCP runtime service plus terminal `session-manager` coverage, and expanded the targeted web confirmation to include the Cline MCP settings controller, home sidebar/home session, shared Cline add-provider dialog, and native-agent routing coverage
+- did not change production code or weaken tests; remaining release risk is still the documented full-suite red status, not focused Cline lifecycle/hardening regressions
+
+Verification:
+
+- `npm test -- --run test/runtime/cline-sdk/cline-task-session-service.test.ts test/runtime/cline-sdk/cline-session-runtime.test.ts test/runtime/cline-sdk/cline-context-overflow-compaction.test.ts test/runtime/cline-sdk/cline-event-adapter.test.ts test/runtime/cline-sdk/cline-message-repository.test.ts test/runtime/cline-sdk/cline-mcp-runtime-service.test.ts test/runtime/trpc/runtime-api.test.ts test/runtime/terminal/session-manager-auto-restart.test.ts test/runtime/terminal/session-manager.test.ts` — passed, 9 files / 140 tests; log: `/tmp/kanban_phase6_logs/run34/1-targeted_backend.log`
+- `npm --prefix web-ui run test -- --run src/runtime/native-agent.test.ts src/hooks/use-task-sessions.test.tsx src/hooks/use-cline-chat-session.test.tsx src/hooks/use-cline-chat-runtime-actions.test.tsx src/hooks/use-cline-chat-panel-controller.test.tsx src/hooks/use-runtime-settings-cline-controller.test.tsx src/hooks/use-runtime-settings-cline-mcp-controller.test.tsx src/hooks/use-home-sidebar-agent-panel.test.tsx src/hooks/use-home-agent-session.test.tsx src/components/detail-panels/cline-agent-chat-panel.test.tsx src/components/detail-panels/cline-chat-message-utils.test.ts src/components/detail-panels/cline-chat-model-selector.test.tsx src/components/detail-panels/cline-model-picker-options.test.ts src/components/shared/cline-add-provider-dialog.test.tsx` — passed, 14 files / 110 tests; log: `/tmp/kanban_phase6_logs/run34/2-targeted_web.log`
+- `npm run typecheck` — passed; log: `/tmp/kanban_phase6_logs/run34/3-root_typecheck.log`
+- `npm run web:typecheck` — passed; log: `/tmp/kanban_phase6_logs/run34/4-web_typecheck.log`
+- `npm test -- --run test/runtime/terminal/session-manager-auto-restart.test.ts test/runtime/cline-sdk/cline-session-runtime.test.ts` — passed, 2 files / 21 tests; log: `/tmp/kanban_phase6_logs/run34/5-focused_backend_release_regressions.log`
+
+Next step:
+
+- keep Phase 6 conditional: green for focused Cline lifecycle/hardening scope, red for whole-stack release until the documented backend/web full-suite failures are accepted as release exceptions or fixed by follow-up tasks
+
+### Entry 14
+
+Date:
+
+- 2026-05-05 — Phase 6 validation rerun after Cline lifecycle fixes
+
+State:
+
+- targeted Cline backend coverage is green across context overflow compaction, event adapter, message repository, session runtime, task session service, and runtime API
+- targeted Cline chat UI coverage is green across chat runtime actions, chat session, panel controller, chat panel, chat message utilities, model selector/options, runtime settings Cline controller, and task sessions
+- root and web TypeScript typechecks are green
+- full-suite status remains red unless the operator explicitly accepts the documented exceptions:
+  - full backend `npm test` still fails in non-Cline/full-suite areas dominated by runtime server-start timeouts and leaked CLI processes; the latest full run reported 5 failed files / 19 failed tests, and a focused rerun of those files reported 4 failed files / 18 failed tests after `git-history.test.ts` passed
+  - full web `npm --prefix web-ui run test` failed before executing tests because 59 Vitest fork workers timed out waiting to start
+  - focused Featurebase reruns still fail at worker startup for `use-featurebase-feedback-widget.test.tsx`; `featurebase-feedback-button.test.tsx` itself passed 10 tests when constrained to one worker
+- classification: no evidence that the Cline lifecycle fixes regressed Cline SDK/runtime API/task-session/chat UI behavior; remaining red items are documented release exceptions or follow-up triage candidates, not fixed by weakening tests
+
+Verification:
+
+- `npx vitest run test/runtime/cline-sdk/cline-context-overflow-compaction.test.ts test/runtime/cline-sdk/cline-event-adapter.test.ts test/runtime/cline-sdk/cline-message-repository.test.ts test/runtime/cline-sdk/cline-session-runtime.test.ts test/runtime/cline-sdk/cline-task-session-service.test.ts test/runtime/trpc/runtime-api.test.ts` — passed, 6 files / 122 tests; log: `/tmp/kanban_phase6_task_t_e007b7c3_logs/01-targeted-backend-cline.log`
+- `npm --prefix web-ui run test -- --run src/hooks/use-cline-chat-runtime-actions.test.tsx src/hooks/use-cline-chat-session.test.tsx src/hooks/use-cline-chat-panel-controller.test.tsx src/components/detail-panels/cline-agent-chat-panel.test.tsx src/components/detail-panels/cline-chat-message-utils.test.ts src/components/detail-panels/cline-chat-model-selector.test.tsx src/components/detail-panels/cline-model-picker-options.test.ts src/hooks/use-runtime-settings-cline-controller.test.tsx src/hooks/use-task-sessions.test.tsx` — passed, 9 files / 76 tests; log: `/tmp/kanban_phase6_task_t_e007b7c3_logs/02-targeted-web-cline.log`
+- `npm run typecheck` — passed; log: `/tmp/kanban_phase6_task_t_e007b7c3_logs/03-root-typecheck.log`
+- `npm run web:typecheck` — passed; log: `/tmp/kanban_phase6_task_t_e007b7c3_logs/04-web-typecheck.log`
+- `npm test` — failed, 5 failed files / 19 failed tests / 358 passed; log: `/tmp/kanban_phase6_task_t_e007b7c3_logs/05-full-backend.log`
+- `npm --prefix web-ui run test` — failed with 59 Vitest worker startup errors before tests executed; log: `/tmp/kanban_phase6_task_t_e007b7c3_logs/06-full-web.log`
+- `npx vitest run test/runtime/git-history.test.ts test/integration/cli-compat.integration.test.ts test/integration/runtime-state-stream.integration.test.ts test/integration/task-command-exit.integration.test.ts test/integration/task-worktree.integration.test.ts` — failed, 4 failed files / 18 failed tests / 10 passed; `git-history.test.ts` passed in this focused rerun; log: `/tmp/kanban_phase6_task_t_e007b7c3_logs/07-focused-backend-full-failure-files.log`
+- `npm --prefix web-ui run test -- --run src/hooks/use-featurebase-feedback-widget.test.tsx src/components/featurebase-feedback-button.test.tsx --pool=forks --maxWorkers=1` — failed because `use-featurebase-feedback-widget.test.tsx` worker timed out waiting to start; `featurebase-feedback-button.test.tsx` passed 10 tests; log: `/tmp/kanban_phase6_task_t_e007b7c3_logs/09-targeted-web-featurebase-clean.log`
+- `npm --prefix web-ui run test -- --run src/hooks/use-featurebase-feedback-widget.test.tsx --pool=threads --maxWorkers=1` — failed because the threads worker also timed out waiting to start; log: `/tmp/kanban_phase6_task_t_e007b7c3_logs/10-targeted-web-featurebase-threads.log`
+
+Next step:
+
+- if the operator accepts these as release exceptions, Phase 6 is ready within the verified Cline lifecycle/hardening scope
+- otherwise, create follow-up tasks for backend runtime server-start/CLI leak triage, task-worktree trash-patch timeout triage, and web-ui Featurebase/Vitest worker startup triage
+- do not make additional cleanup architecture changes unless one of those follow-ups proves a true Cline cleanup regression
+
+### Entry 13
+
+Date:
+
+- 2026-05-05 — Phase 6 final verification results recorded after focused blocker fixes
+
+State:
+
+- focused verification confirmed the two prior Phase 6 blockers are fixed:
+  - clean `exitCode: 0` / non-interrupted PTY task exits no longer auto-restart
+  - Cline MCP tool bundles release through start-host failure plus stop, abort, and dispose paths
+- release-ready within the narrow Phase 6 blocker-fix scope:
+  - focused backend regressions for `session-manager` and `cline-session-runtime`
+  - root typecheck, web typecheck, and lint
+- not fully release-ready without an explicit exception because the latest full backend and web test suites are not green
+- remaining blockers or release exceptions to decide:
+  - `npm test` still fails in runtime server-start timeout integration coverage: `test/integration/runtime-state-stream.integration.test.ts` and `test/integration/task-command-exit.integration.test.ts`
+  - `npm --prefix web-ui run test` still fails in `web-ui/src/hooks/use-featurebase-feedback-widget.test.tsx` plus additional Vitest fork worker startup timeouts
+  - the verification run classified those failures as likely pre-existing/environmental and unrelated to the Phase 6 blocker fixes, but they remain open until accepted as release exceptions or triaged separately
+
+Verification:
+
+- `npm run typecheck` — passed; log: `/tmp/kanban_phase6_logs/3-npm_run_typecheck-rerun.log`
+- `npm run web:typecheck` — passed; log: `/tmp/kanban_phase6_logs/4-npm_run_web_typecheck.log`
+- `npm run lint` — passed with 6 optional-chain warnings; log: `/tmp/kanban_phase6_logs/5-npm_run_lint.log`
+- `npm test -- --run test/runtime/terminal/session-manager-auto-restart.test.ts test/runtime/cline-sdk/cline-session-runtime.test.ts` — passed, 2 files / 20 tests; log: `/tmp/kanban_phase6_logs/6-targeted_prior_blocker_regressions-final.log`
+- `npm test` — failed, 3 failed files / 46 passed and 16 failed / 344 passed; log: `/tmp/kanban_phase6_logs/1-npm_test-rerun.log`
+- `npm --prefix web-ui run test` — failed, 1 failed file / 41 passed, 9 failed / 224 passed, plus 17 worker startup errors; log: `/tmp/kanban_phase6_logs/2-npm_prefix_web-ui_run_test-rerun.log`
+
+Next step:
+
+- if the operator accepts the documented full-suite failures as unrelated release exceptions, Phase 6 is ready for release within the verified blocker-fix scope
+- otherwise, create targeted follow-up work for backend runtime server-start timeouts and web-ui Featurebase/Vitest worker failures before marking the whole stack release-ready
+- avoid additional architecture refactors unless those follow-up failures expose a real cleanup regression
 
 ### Entry 12
 

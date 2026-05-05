@@ -223,11 +223,21 @@ function createFakeClineSessionRuntime(): FakeClineSessionRuntimeController {
 				}
 				return snapshot;
 			},
-			async stopTaskSession(taskId: string): Promise<void> {
+			async stopTaskSession(taskId: string) {
+				const sessionId = sessionIdByTaskId.get(taskId) ?? null;
+				if (!sessionId) {
+					return { status: "not_bound" as const, sessionId: null };
+				}
 				await stopTaskSessionMock(taskId);
+				return { status: "controlled" as const, sessionId };
 			},
-			async abortTaskSession(taskId: string): Promise<void> {
+			async abortTaskSession(taskId: string) {
+				const sessionId = sessionIdByTaskId.get(taskId) ?? null;
+				if (!sessionId) {
+					return { status: "not_bound" as const, sessionId: null };
+				}
 				await abortTaskSessionMock(taskId);
+				return { status: "controlled" as const, sessionId };
 			},
 			async clearTaskSessions(taskId: string): Promise<void> {
 				await clearTaskSessionsMock(taskId);
@@ -850,7 +860,7 @@ describe("InMemoryClineTaskSessionService", () => {
 		expect(runtime.startTaskSessionMock).toHaveBeenCalledWith(
 			expect.objectContaining({
 				systemPrompt: expect.stringContaining(
-					"'/usr/local/bin/node' '/Users/example/repo/dist/cli.js' task create",
+					'"/usr/local/bin/node" "/Users/example/repo/dist/cli.js" task create',
 				),
 			}),
 		);
@@ -1033,6 +1043,61 @@ describe("InMemoryClineTaskSessionService", () => {
 		expect(stopped?.reviewReason).toBe("interrupted");
 	});
 
+	it("rebinds persisted sessions before stopping when entry exists but runtime binding is missing", async () => {
+		const { service, runtime } = createTrackedService();
+		await service.startTaskSession({
+			taskId: "task-1",
+			cwd: "/tmp/worktree",
+			prompt: "Initial prompt",
+		});
+		runtime.sessionIdByTaskId.delete("task-1");
+		runtime.taskIdBySessionId.clear();
+		runtime.readPersistedTaskSessionMock.mockResolvedValue({
+			record: {
+				sessionId: "task-1-persisted",
+				source: "core" as ClinePersistedTaskSessionSnapshot["record"]["source"],
+				status: "running",
+				startedAt: "2026-03-17T10:00:00.000Z",
+				updatedAt: "2026-03-17T10:05:00.000Z",
+				interactive: true,
+				provider: "anthropic",
+				model: "claude-sonnet-4-6",
+				cwd: "/tmp/worktree",
+				workspaceRoot: "/tmp/workspace-root",
+				enableTools: true,
+				enableSpawn: false,
+				enableTeams: false,
+				isSubagent: false,
+			},
+			messages: [{ role: "user", content: "Recovered prompt" }],
+		});
+
+		const stopped = await service.stopTaskSession("task-1");
+
+		expect(runtime.readPersistedTaskSessionMock).toHaveBeenCalledWith("task-1");
+		expect(runtime.getTaskSessionId("task-1")).toBe("task-1-persisted");
+		expect(runtime.stopTaskSessionMock).toHaveBeenCalledWith("task-1");
+		expect(stopped?.state).toBe("interrupted");
+	});
+
+	it("returns null for cancel when a running entry has no runtime binding or persisted Cline session", async () => {
+		const { service, runtime } = createTrackedService();
+		await service.startTaskSession({
+			taskId: "task-1",
+			cwd: "/tmp/worktree",
+			prompt: "Initial prompt",
+		});
+		runtime.sessionIdByTaskId.delete("task-1");
+		runtime.taskIdBySessionId.clear();
+		runtime.readPersistedTaskSessionMock.mockResolvedValue(null);
+
+		const canceled = await service.cancelTaskTurn("task-1");
+
+		expect(canceled).toBeNull();
+		expect(runtime.abortTaskSessionMock).not.toHaveBeenCalled();
+		expect(service.getSummary("task-1")?.state).toBe("running");
+	});
+
 	it("cancels only the active turn without interrupting or trashing the task", async () => {
 		const { service, runtime } = createTrackedService();
 
@@ -1210,6 +1275,59 @@ describe("InMemoryClineTaskSessionService", () => {
 		expect(service.getSummary("task-1")?.latestTurnCheckpoint?.commit).toBe("commit-2");
 	});
 
+	it("settles start result text into awaiting review when no done event streams", async () => {
+		const { service, runtime } = createTrackedService();
+		runtime.startTaskSessionMock.mockResolvedValueOnce({
+			sessionId: createSessionId("task-1"),
+			result: { text: "Final start-only result" },
+		});
+
+		const summary = await service.startTaskSession({
+			taskId: "task-1",
+			cwd: "/tmp/worktree",
+			prompt: "Initial prompt",
+		});
+
+		expect(summary.state).toBe("running");
+		await vi.waitFor(() => {
+			expect(service.getSummary("task-1")?.state).toBe("awaiting_review");
+		});
+		expect(service.getSummary("task-1")?.reviewReason).toBe("exit");
+		expect(
+			service
+				.listMessages("task-1")
+				.filter((message) => message.role === "assistant")
+				.map((message) => message.content),
+		).toEqual(["Final start-only result"]);
+	});
+
+	it("settles send result text into awaiting review when no done event streams", async () => {
+		const { service, runtime } = createTrackedService();
+		await service.startTaskSession({
+			taskId: "task-1",
+			cwd: "/tmp/worktree",
+			prompt: "Initial prompt",
+		});
+		await vi.waitFor(() => {
+			expect(runtime.startTaskSessionMock).toHaveBeenCalledTimes(1);
+		});
+		runtime.sendTaskSessionInputMock.mockResolvedValueOnce({ text: "Final send-only result" });
+
+		const summary = await service.sendTaskSessionInput("task-1", "Continue");
+
+		expect(summary?.state).toBe("running");
+		await vi.waitFor(() => {
+			expect(service.getSummary("task-1")?.state).toBe("awaiting_review");
+		});
+		expect(service.getSummary("task-1")?.reviewReason).toBe("exit");
+		expect(
+			service
+				.listMessages("task-1")
+				.filter((message) => message.role === "assistant")
+				.map((message) => message.content),
+		).toEqual(["Final send-only result"]);
+	});
+
 	it("creates task entry and session mapping before start() resolves", async () => {
 		const { service, runtime } = createTrackedService();
 		const startDeferred = createDeferred<StartClineSessionRuntimeResult>();
@@ -1271,6 +1389,139 @@ describe("InMemoryClineTaskSessionService", () => {
 			expect(runtime.sendTaskSessionInputMock).toHaveBeenCalledTimes(1);
 		});
 		sendDeferred.resolve({ text: "done" });
+	});
+
+	it("ignores stale start completion after clear resets the task generation", async () => {
+		const { service, runtime } = createTrackedService();
+		const startDeferred = createDeferred<StartClineSessionRuntimeResult>();
+		runtime.startTaskSessionMock.mockImplementationOnce(
+			async (_request: StartClineSessionRuntimeRequest & { sessionId: string }) => await startDeferred.promise,
+		);
+
+		await service.startTaskSession({
+			taskId: "task-1",
+			cwd: "/tmp/worktree",
+			prompt: "Initial prompt",
+		});
+		const staleSessionId = await waitForTaskSessionId(runtime, "task-1");
+
+		await service.clearTaskSession("task-1");
+		startDeferred.resolve({
+			sessionId: staleSessionId,
+			result: { text: "stale startup result" },
+		});
+
+		await vi.waitFor(() => {
+			expect(runtime.startTaskSessionMock).toHaveBeenCalledTimes(1);
+		});
+		await vi.waitFor(() => {
+			expect(runtime.getTaskSessionId("task-1")).toBeNull();
+		});
+
+		expect(service.getSummary("task-1")?.state).toBe("idle");
+		expect(service.listMessages("task-1")).toEqual([]);
+	});
+
+	it("ignores stale start completion after stop resets the task generation", async () => {
+		const { service, runtime } = createTrackedService();
+		const startDeferred = createDeferred<StartClineSessionRuntimeResult>();
+		runtime.startTaskSessionMock.mockImplementationOnce(
+			async (_request: StartClineSessionRuntimeRequest & { sessionId: string }) => await startDeferred.promise,
+		);
+
+		await service.startTaskSession({
+			taskId: "task-1",
+			cwd: "/tmp/worktree",
+			prompt: "Initial prompt",
+		});
+		const staleSessionId = await waitForTaskSessionId(runtime, "task-1");
+
+		const stopped = await service.stopTaskSession("task-1");
+		startDeferred.resolve({
+			sessionId: staleSessionId,
+			result: { text: "stale startup result" },
+		});
+		await Promise.resolve();
+
+		expect(stopped?.state).toBe("interrupted");
+		expect(service.getSummary("task-1")?.state).toBe("interrupted");
+		expect(
+			service
+				.listMessages("task-1")
+				.filter((message) => message.role === "assistant")
+				.map((message) => message.content),
+		).toEqual([]);
+	});
+
+	it("ignores stale send completion after clear resets the task generation", async () => {
+		const { service, runtime } = createTrackedService();
+		const sendDeferred = createDeferred<unknown>();
+		runtime.sendTaskSessionInputMock.mockImplementationOnce(async () => await sendDeferred.promise);
+
+		await service.startTaskSession({
+			taskId: "task-1",
+			cwd: "/tmp/worktree",
+			prompt: "",
+		});
+		await vi.waitFor(() => {
+			expect(runtime.startTaskSessionMock).toHaveBeenCalledTimes(1);
+		});
+		await service.sendTaskSessionInput("task-1", "Continue");
+		await vi.waitFor(() => {
+			expect(runtime.sendTaskSessionInputMock).toHaveBeenCalledTimes(1);
+		});
+
+		await service.clearTaskSession("task-1");
+		sendDeferred.resolve({ text: "stale send result" });
+		await Promise.resolve();
+
+		expect(service.getSummary("task-1")?.state).toBe("idle");
+		expect(service.listMessages("task-1")).toEqual([]);
+	});
+
+	it("ignores older send completion when a newer same-task send is active", async () => {
+		const { service, runtime } = createTrackedService();
+		const firstSendDeferred = createDeferred<unknown>();
+		const secondSendDeferred = createDeferred<unknown>();
+		runtime.sendTaskSessionInputMock
+			.mockImplementationOnce(async () => await firstSendDeferred.promise)
+			.mockImplementationOnce(async () => await secondSendDeferred.promise);
+
+		await service.startTaskSession({
+			taskId: "task-1",
+			cwd: "/tmp/worktree",
+			prompt: "",
+		});
+		await vi.waitFor(() => {
+			expect(runtime.startTaskSessionMock).toHaveBeenCalledTimes(1);
+		});
+
+		await service.sendTaskSessionInput("task-1", "First follow-up");
+		await service.sendTaskSessionInput("task-1", "Second follow-up");
+		await vi.waitFor(() => {
+			expect(runtime.sendTaskSessionInputMock).toHaveBeenCalledTimes(2);
+		});
+
+		firstSendDeferred.resolve({ text: "older first result" });
+		await Promise.resolve();
+		expect(
+			service
+				.listMessages("task-1")
+				.filter((message) => message.role === "assistant")
+				.map((message) => message.content),
+		).toEqual([]);
+		expect(service.getSummary("task-1")?.state).toBe("running");
+
+		secondSendDeferred.resolve({ text: "newer second result" });
+		await vi.waitFor(() => {
+			expect(service.getSummary("task-1")?.state).toBe("awaiting_review");
+		});
+		expect(
+			service
+				.listMessages("task-1")
+				.filter((message) => message.role === "assistant")
+				.map((message) => message.content),
+		).toEqual(["newer second result"]);
 	});
 
 	it("keeps the task resumable when native Cline startup throws", async () => {

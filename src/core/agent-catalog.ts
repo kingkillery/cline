@@ -58,6 +58,14 @@ export const RUNTIME_AGENT_CATALOG: RuntimeAgentCatalogEntry[] = [
 		autonomousArgs: ["--yolo"],
 		installUrl: "https://github.com/google-gemini/gemini-cli",
 	},
+	{
+		id: "copilot",
+		label: "GitHub Copilot",
+		binary: "npx",
+		baseArgs: ["@github/copilot-cli"],
+		autonomousArgs: ["--auto-approve"],
+		installUrl: "https://docs.github.com/en/copilot",
+	},
 ];
 
 // Temporarily keep launch support scoped to the core agent set.
@@ -66,6 +74,7 @@ export const RUNTIME_LAUNCH_SUPPORTED_AGENT_IDS: readonly RuntimeAgentId[] = [
 	"cline",
 	"claude",
 	"codex",
+	"copilot",
 	"droid",
 	// "opencode",
 	// "gemini",

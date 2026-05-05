@@ -1,8 +1,8 @@
 import { expect, type Page, test } from "@playwright/test";
 
-async function createTaskFromBacklog(page: Page, title: string) {
-	const backlogColumn = page.locator('[data-column-id="backlog"]').first();
-	await backlogColumn.getByRole("button", { name: "Create task" }).click();
+async function createTaskFromTriage(page: Page, title: string) {
+	const triageColumn = page.locator('[data-column-id="triage"]').first();
+	await triageColumn.getByRole("button", { name: "Create task" }).click();
 	const prompt = page.getByPlaceholder("Describe the task");
 	await prompt.fill(title);
 	await prompt.press("Control+Enter");
@@ -16,10 +16,11 @@ async function openTaskFromBoard(page: Page, title: string) {
 
 test("renders kanban top bar and columns", async ({ page }) => {
 	await page.goto("/");
-	await expect(page).toHaveTitle(/Kanban/);
-	await expect(page.getByRole("button", { name: "Projects" })).toBeVisible();
-	await expect(page.getByRole("button", { name: "Agent" })).toBeVisible();
-	await expect(page.getByText("Backlog", { exact: true })).toBeVisible();
+	await expect(page).toHaveTitle(/kanban/i);
+	await expect(page.getByRole("button", { name: "Projects", exact: true })).toBeVisible();
+	await expect(page.getByRole("button", { name: "Kanban Agent" })).toBeVisible();
+	await expect(page.getByText("Triage", { exact: true })).toBeVisible();
+	await expect(page.getByText("Todo", { exact: true })).toBeVisible();
 	await expect(page.getByText("In Progress", { exact: true })).toBeVisible();
 	await expect(page.getByText("Review", { exact: true })).toBeVisible();
 	await expect(page.getByText("Trash", { exact: true })).toBeVisible();
@@ -29,7 +30,7 @@ test("renders kanban top bar and columns", async ({ page }) => {
 test("creating and opening a backlog task shows the inline editor", async ({ page }) => {
 	await page.goto("/");
 	const taskTitle = `smoke-${Date.now()}`;
-	await createTaskFromBacklog(page, taskTitle);
+	await createTaskFromTriage(page, taskTitle);
 	await openTaskFromBoard(page, taskTitle);
 	await expect(page.getByPlaceholder("Describe the task")).toHaveValue(taskTitle);
 	await expect(page.getByRole("button", { name: "Save" })).toBeVisible();
@@ -39,12 +40,12 @@ test("creating and opening a backlog task shows the inline editor", async ({ pag
 test("escape key closes the backlog inline editor", async ({ page }) => {
 	await page.goto("/");
 	const taskTitle = `escape-${Date.now()}`;
-	await createTaskFromBacklog(page, taskTitle);
+	await createTaskFromTriage(page, taskTitle);
 	await openTaskFromBoard(page, taskTitle);
 	await expect(page.getByPlaceholder("Describe the task")).toHaveValue(taskTitle);
 	await page.keyboard.press("Escape");
 	await expect(page.getByPlaceholder("Describe the task")).toHaveCount(0);
-	await expect(page.getByText("Backlog", { exact: true })).toBeVisible();
+	await expect(page.getByText("Triage", { exact: true })).toBeVisible();
 	await expect(page.locator("[data-task-id]").filter({ hasText: taskTitle }).first()).toBeVisible();
 });
 

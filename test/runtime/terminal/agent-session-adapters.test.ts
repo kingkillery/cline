@@ -100,7 +100,7 @@ describe("prepareAgentLaunch hook strategies", () => {
 		expect(appendPromptIndex).toBeGreaterThanOrEqual(0);
 		expect(launch.args[appendPromptIndex + 1]).toContain("Kanban sidebar agent");
 		expect(launch.args[appendPromptIndex + 1]).toContain(
-			"'/usr/local/bin/node' '/Users/example/repo/dist/cli.js' task create",
+			'"/usr/local/bin/node" "/Users/example/repo/dist/cli.js" task create',
 		);
 	});
 
@@ -120,9 +120,7 @@ describe("prepareAgentLaunch hook strategies", () => {
 		expect(configArgIndex).toBeGreaterThanOrEqual(0);
 		expect(launch.args[configArgIndex + 1]).toContain("developer_instructions=");
 		expect(launch.args[configArgIndex + 1]).toContain("Kanban sidebar agent");
-		expect(launch.args[configArgIndex + 1]).toContain(
-			"'/usr/local/bin/node' '/Users/example/repo/dist/cli.js' task create",
-		);
+		expect(launch.args[configArgIndex + 1]).toContain("task create --prompt");
 	});
 
 	it("writes Claude settings with explicit permission hook", async () => {
