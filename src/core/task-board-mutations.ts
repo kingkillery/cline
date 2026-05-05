@@ -3,8 +3,12 @@ import type {
 	RuntimeBoardColumnId,
 	RuntimeBoardData,
 	RuntimeBoardDependency,
+	RuntimeTaskClaim,
+	RuntimeTaskEvent,
+	RuntimeTaskEventType,
 	RuntimeTaskAutoReviewMode,
 	RuntimeTaskImage,
+	RuntimeTaskRun,
 } from "./api-contract";
 import { createUniqueTaskId } from "./task-id";
 
@@ -14,6 +18,7 @@ export interface RuntimeCreateTaskInput {
 	profileId?: string;
 	requiredCapabilities?: string[];
 	blockedReason?: string | null;
+	maxAttempts?: number;
 	startInPlanMode?: boolean;
 	autoReviewEnabled?: boolean;
 	autoReviewMode?: RuntimeTaskAutoReviewMode;
@@ -26,6 +31,7 @@ export interface RuntimeUpdateTaskInput {
 	profileId?: string;
 	requiredCapabilities?: string[];
 	blockedReason?: string | null;
+	maxAttempts?: number;
 	startInPlanMode?: boolean;
 	autoReviewEnabled?: boolean;
 	autoReviewMode?: RuntimeTaskAutoReviewMode;
@@ -90,6 +96,49 @@ export interface RuntimeDeleteTasksResult {
 	deletedTaskIds: string[];
 }
 
+export interface RuntimeClaimTaskInput {
+	taskId: string;
+	assignee: string;
+	profileId?: string | null;
+	agentId?: RuntimeTaskRun["agentId"];
+	pid?: number | null;
+	claimTtlMs: number;
+	maxAttempts?: number;
+	now?: number;
+}
+
+export interface RuntimeClaimTaskResult {
+	board: RuntimeBoardData;
+	claimed: boolean;
+	task: RuntimeBoardCard | null;
+	run: RuntimeTaskRun | null;
+	lockId: string | null;
+	reason?: "missing_task" | "already_claimed" | "blocked" | "attempts_exhausted";
+}
+
+export interface RuntimeTaskHeartbeatResult {
+	board: RuntimeBoardData;
+	updated: boolean;
+	reason?: "missing_task" | "no_claim" | "lock_mismatch" | "expired";
+}
+
+export interface RuntimeReleaseTaskClaimResult {
+	board: RuntimeBoardData;
+	released: boolean;
+	reason?: "missing_task" | "no_claim" | "lock_mismatch";
+}
+
+export interface RuntimeMarkTaskRunStartedResult {
+	board: RuntimeBoardData;
+	updated: boolean;
+	reason?: "missing_task" | "no_run";
+}
+
+export interface RuntimeReclaimExpiredTasksResult {
+	board: RuntimeBoardData;
+	reclaimedTaskIds: string[];
+}
+
 function collectExistingTaskIds(board: RuntimeBoardData): Set<string> {
 	const existingIds = new Set<string>();
 	for (const column of board.columns) {
@@ -112,6 +161,65 @@ function collectTaskIds(board: RuntimeBoardData): Set<string> {
 
 function createDependencyId(): string {
 	return crypto.randomUUID().replaceAll("-", "").slice(0, 8);
+}
+
+function createBoardEventId(): string {
+	return crypto.randomUUID().replaceAll("-", "").slice(0, 12);
+}
+
+function createRunId(): string {
+	return `run-${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}`;
+}
+
+function createLockId(): string {
+	return `lock-${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}`;
+}
+
+function appendTaskEvent(
+	board: RuntimeBoardData,
+	input: {
+		taskId: string;
+		type: RuntimeTaskEventType;
+		now?: number;
+		actor?: string;
+		runId?: string | null;
+		fromColumnId?: RuntimeBoardColumnId | null;
+		toColumnId?: RuntimeBoardColumnId | null;
+		message?: string | null;
+		metadata?: Record<string, unknown>;
+	},
+): RuntimeBoardData {
+	const event: RuntimeTaskEvent = {
+		id: createBoardEventId(),
+		taskId: input.taskId,
+		type: input.type,
+		createdAt: input.now ?? Date.now(),
+		actor: input.actor,
+		runId: input.runId,
+		fromColumnId: input.fromColumnId,
+		toColumnId: input.toColumnId,
+		message: input.message,
+		metadata: input.metadata,
+	};
+	return {
+		...board,
+		events: [...(board.events ?? []), event],
+	};
+}
+
+function updateTaskRun(board: RuntimeBoardData, run: RuntimeTaskRun): RuntimeBoardData {
+	const runs = board.runs ?? [];
+	const existingIndex = runs.findIndex((candidate) => candidate.id === run.id);
+	if (existingIndex === -1) {
+		return {
+			...board,
+			runs: [...runs, run],
+		};
+	}
+	return {
+		...board,
+		runs: runs.map((candidate, index) => (index === existingIndex ? run : candidate)),
+	};
 }
 
 function createDependencyPairKey(backlogTaskId: string, linkedTaskId: string): string {
@@ -294,6 +402,11 @@ export function addTaskToColumn(
 		profileId: input.profileId?.trim() || undefined,
 		requiredCapabilities: cloneRequiredCapabilities(input.requiredCapabilities),
 		blockedReason: input.blockedReason?.trim() || null,
+		claim: null,
+		attemptCount: 0,
+		maxAttempts: input.maxAttempts,
+		lastError: null,
+		lastRunId: null,
 		startInPlanMode: Boolean(input.startInPlanMode),
 		autoReviewEnabled: Boolean(input.autoReviewEnabled),
 		autoReviewMode: normalizeTaskAutoReviewMode(input.autoReviewMode),
@@ -318,11 +431,17 @@ export function addTaskToColumn(
 		};
 	});
 
+	const boardWithTask = {
+		...board,
+		columns,
+	};
 	return {
-		board: {
-			...board,
-			columns,
-		},
+		board: appendTaskEvent(boardWithTask, {
+			taskId: task.id,
+			type: "created",
+			now,
+			toColumnId: columnId,
+		}),
 		task,
 	};
 }
@@ -363,10 +482,18 @@ export function addTaskDependency(
 		createdAt: Date.now(),
 	};
 	return {
-		board: {
-			...board,
-			dependencies: [...board.dependencies, dependency],
-		},
+		board: appendTaskEvent(
+			{
+				...board,
+				dependencies: [...board.dependencies, dependency],
+			},
+			{
+				taskId: resolved.backlogTaskId,
+				type: "dependency_linked",
+				message: `Linked to ${resolved.linkedTaskId}`,
+				metadata: { dependencyId: dependency.id, linkedTaskId: resolved.linkedTaskId },
+			},
+		),
 		added: true,
 		dependency,
 	};
@@ -390,11 +517,25 @@ export function removeTaskDependency(board: RuntimeBoardData, dependencyId: stri
 	if (dependencies.length === board.dependencies.length) {
 		return { board, removed: false };
 	}
+	const removedDependency = board.dependencies.find((dependency) => dependency.id === dependencyId);
 	return {
-		board: {
-			...board,
-			dependencies,
-		},
+		board: removedDependency
+			? appendTaskEvent(
+					{
+						...board,
+						dependencies,
+					},
+					{
+						taskId: removedDependency.fromTaskId,
+						type: "dependency_unlinked",
+						message: `Unlinked from ${removedDependency.toTaskId}`,
+						metadata: { dependencyId },
+					},
+				)
+			: {
+					...board,
+					dependencies,
+				},
 		removed: true,
 	};
 }
@@ -455,11 +596,18 @@ export function deleteTasksFromBoard(board: RuntimeBoardData, taskIds: Iterable<
 	);
 
 	return {
-		board: {
-			...board,
-			columns,
-			dependencies,
-		},
+		board: deletedTaskIds.reduce(
+			(nextBoard, taskId) =>
+				appendTaskEvent(nextBoard, {
+					taskId,
+					type: "deleted",
+				}),
+			{
+				...board,
+				columns,
+				dependencies,
+			},
+		),
 		deleted: true,
 		deletedTaskIds,
 	};
@@ -554,10 +702,19 @@ export function moveTaskToColumn(
 
 	return {
 		moved: true,
-		board: updateTaskDependencies({
-			...board,
-			columns,
-		}),
+		board: appendTaskEvent(
+			updateTaskDependencies({
+				...board,
+				columns,
+			}),
+			{
+				taskId: normalizedTaskId,
+				type: "moved",
+				now,
+				fromColumnId: found.columnId,
+				toColumnId: targetColumnId,
+			},
+		),
 		task: movedTask,
 		fromColumnId: found.columnId,
 	};
@@ -613,6 +770,7 @@ export function updateTask(
 						? card.requiredCapabilities
 						: cloneRequiredCapabilities(input.requiredCapabilities),
 				blockedReason: input.blockedReason === undefined ? card.blockedReason : input.blockedReason?.trim() || null,
+				maxAttempts: input.maxAttempts === undefined ? card.maxAttempts : input.maxAttempts,
 				startInPlanMode: Boolean(input.startInPlanMode),
 				autoReviewEnabled: Boolean(input.autoReviewEnabled),
 				autoReviewMode: normalizeTaskAutoReviewMode(input.autoReviewMode),
@@ -632,13 +790,274 @@ export function updateTask(
 			updated: false,
 		};
 	}
+	const eventTask: RuntimeBoardCard = updatedTask;
 
 	return {
-		board: {
-			...board,
-			columns,
-		},
+		board: appendTaskEvent(
+			{
+				...board,
+				columns,
+			},
+			{
+				taskId: normalizedTaskId,
+				type: eventTask.blockedReason ? "blocked" : "updated",
+				now,
+				message: eventTask.blockedReason ?? null,
+			},
+		),
 		task: updatedTask,
 		updated: true,
 	};
+}
+
+export function claimTaskForRun(board: RuntimeBoardData, input: RuntimeClaimTaskInput): RuntimeClaimTaskResult {
+	const now = input.now ?? Date.now();
+	const found = findTaskLocation(board, input.taskId.trim());
+	if (!found) {
+		return { board, claimed: false, task: null, run: null, lockId: null, reason: "missing_task" };
+	}
+	if (found.task.blockedReason) {
+		return { board, claimed: false, task: found.task, run: null, lockId: null, reason: "blocked" };
+	}
+	if (found.task.claim && found.task.claim.expiresAt > now) {
+		return { board, claimed: false, task: found.task, run: null, lockId: null, reason: "already_claimed" };
+	}
+	const maxAttempts = input.maxAttempts ?? found.task.maxAttempts ?? 3;
+	const attemptCount = found.task.attemptCount ?? 0;
+	if (attemptCount >= maxAttempts) {
+		return { board, claimed: false, task: found.task, run: null, lockId: null, reason: "attempts_exhausted" };
+	}
+	const lockId = createLockId();
+	const runId = createRunId();
+	const claim: RuntimeTaskClaim = {
+		assignee: input.assignee.trim() || "dispatcher",
+		lockId,
+		claimedAt: now,
+		expiresAt: now + input.claimTtlMs,
+		heartbeatAt: now,
+		pid: input.pid ?? null,
+	};
+	const run: RuntimeTaskRun = {
+		id: runId,
+		taskId: found.task.id,
+		profileId: input.profileId ?? found.task.profileId ?? null,
+		agentId: input.agentId ?? null,
+		status: "claimed",
+		startedAt: now,
+		updatedAt: now,
+		finishedAt: null,
+		pid: input.pid ?? null,
+		error: null,
+		summary: null,
+	};
+	let updatedTask: RuntimeBoardCard = {
+		...found.task,
+		claim,
+		attemptCount: attemptCount + 1,
+		maxAttempts,
+		lastError: null,
+		lastRunId: runId,
+		updatedAt: now,
+	};
+	let columns = board.columns.map((column, columnIndex) => {
+		if (columnIndex !== found.columnIndex) {
+			return column;
+		}
+		return {
+			...column,
+			cards: column.cards.map((card, taskIndex) => (taskIndex === found.taskIndex ? updatedTask : card)),
+		};
+	});
+	let nextBoard: RuntimeBoardData = { ...board, columns };
+	if (found.columnId !== "in_progress") {
+		const moved = moveTaskToColumn(nextBoard, found.task.id, "in_progress", now);
+		nextBoard = moved.board;
+		updatedTask = moved.task ?? updatedTask;
+		columns = nextBoard.columns;
+	}
+	nextBoard = updateTaskRun(nextBoard, run);
+	nextBoard = appendTaskEvent(nextBoard, {
+		taskId: found.task.id,
+		type: "claimed",
+		now,
+		actor: claim.assignee,
+		runId,
+		fromColumnId: found.columnId,
+		toColumnId: "in_progress",
+		metadata: { lockId, attempt: updatedTask.attemptCount ?? 1 },
+	});
+	return {
+		board: nextBoard,
+		claimed: true,
+		task: updatedTask,
+		run,
+		lockId,
+	};
+}
+
+export function heartbeatTaskClaim(
+	board: RuntimeBoardData,
+	taskId: string,
+	lockId: string,
+	claimTtlMs: number,
+	now: number = Date.now(),
+): RuntimeTaskHeartbeatResult {
+	const found = findTaskLocation(board, taskId.trim());
+	if (!found) {
+		return { board, updated: false, reason: "missing_task" };
+	}
+	if (!found.task.claim) {
+		return { board, updated: false, reason: "no_claim" };
+	}
+	if (found.task.claim.lockId !== lockId) {
+		return { board, updated: false, reason: "lock_mismatch" };
+	}
+	if (found.task.claim.expiresAt <= now) {
+		return { board, updated: false, reason: "expired" };
+	}
+	const task: RuntimeBoardCard = {
+		...found.task,
+		claim: {
+			...found.task.claim,
+			heartbeatAt: now,
+			expiresAt: now + claimTtlMs,
+		},
+		updatedAt: now,
+	};
+	const columns = board.columns.map((column, columnIndex) =>
+		columnIndex === found.columnIndex
+			? { ...column, cards: column.cards.map((card, taskIndex) => (taskIndex === found.taskIndex ? task : card)) }
+			: column,
+	);
+	return {
+		board: appendTaskEvent(
+			{
+				...board,
+				columns,
+			},
+			{
+				taskId: found.task.id,
+				type: "heartbeat",
+				now,
+				actor: found.task.claim.assignee,
+				runId: found.task.lastRunId,
+			},
+		),
+		updated: true,
+	};
+}
+
+export function markTaskRunStarted(
+	board: RuntimeBoardData,
+	taskId: string,
+	input: { pid?: number | null; now?: number } = {},
+): RuntimeMarkTaskRunStartedResult {
+	const now = input.now ?? Date.now();
+	const found = findTaskLocation(board, taskId.trim());
+	if (!found) {
+		return { board, updated: false, reason: "missing_task" };
+	}
+	const run = (board.runs ?? []).find((candidate) => candidate.id === found.task.lastRunId);
+	if (!run) {
+		return { board, updated: false, reason: "no_run" };
+	}
+	let nextBoard = updateTaskRun(board, {
+		...run,
+		status: "running",
+		updatedAt: now,
+		pid: input.pid ?? run.pid,
+	});
+	nextBoard = appendTaskEvent(nextBoard, {
+		taskId: found.task.id,
+		type: "started",
+		now,
+		actor: found.task.claim?.assignee,
+		runId: run.id,
+	});
+	return { board: nextBoard, updated: true };
+}
+
+export function releaseTaskClaim(
+	board: RuntimeBoardData,
+	taskId: string,
+	lockId: string | null,
+	input: {
+		status?: RuntimeTaskRun["status"];
+		error?: string | null;
+		summary?: string | null;
+		now?: number;
+	} = {},
+): RuntimeReleaseTaskClaimResult {
+	const now = input.now ?? Date.now();
+	const found = findTaskLocation(board, taskId.trim());
+	if (!found) {
+		return { board, released: false, reason: "missing_task" };
+	}
+	if (!found.task.claim) {
+		return { board, released: false, reason: "no_claim" };
+	}
+	if (lockId && found.task.claim.lockId !== lockId) {
+		return { board, released: false, reason: "lock_mismatch" };
+	}
+	const task: RuntimeBoardCard = {
+		...found.task,
+		claim: null,
+		lastError: input.error ?? null,
+		updatedAt: now,
+	};
+	const columns = board.columns.map((column, columnIndex) =>
+		columnIndex === found.columnIndex
+			? { ...column, cards: column.cards.map((card, taskIndex) => (taskIndex === found.taskIndex ? task : card)) }
+			: column,
+	);
+	let nextBoard: RuntimeBoardData = { ...board, columns };
+	const run = (nextBoard.runs ?? []).find((candidate) => candidate.id === found.task.lastRunId);
+	if (run) {
+		nextBoard = updateTaskRun(nextBoard, {
+			...run,
+			status: input.status ?? "cancelled",
+			updatedAt: now,
+			finishedAt: now,
+			error: input.error ?? null,
+			summary: input.summary ?? null,
+		});
+	}
+	nextBoard = appendTaskEvent(nextBoard, {
+		taskId: found.task.id,
+		type: input.error ? "failed" : "released",
+		now,
+		actor: found.task.claim.assignee,
+		runId: found.task.lastRunId,
+		message: input.error ?? input.summary ?? null,
+	});
+	return { board: nextBoard, released: true };
+}
+
+export function reclaimExpiredTaskClaims(
+	board: RuntimeBoardData,
+	now: number = Date.now(),
+): RuntimeReclaimExpiredTasksResult {
+	let nextBoard = board;
+	const reclaimedTaskIds: string[] = [];
+	for (const column of board.columns) {
+		for (const task of column.cards) {
+			if (!task.claim || task.claim.expiresAt > now) {
+				continue;
+			}
+			const released = releaseTaskClaim(nextBoard, task.id, task.claim.lockId, {
+				status: "reclaimed",
+				error: "Claim expired before the worker heartbeat was renewed.",
+				now,
+			});
+			nextBoard = appendTaskEvent(released.board, {
+				taskId: task.id,
+				type: "reclaimed",
+				now,
+				actor: task.claim.assignee,
+				runId: task.lastRunId,
+			});
+			reclaimedTaskIds.push(task.id);
+		}
+	}
+	return { board: nextBoard, reclaimedTaskIds };
 }

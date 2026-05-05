@@ -87,12 +87,29 @@ export const runtimeTaskImageSchema = z.object({
 });
 export type RuntimeTaskImage = z.infer<typeof runtimeTaskImageSchema>;
 
+export const runtimeTaskClaimSchema = z
+	.object({
+		assignee: z.string(),
+		lockId: z.string(),
+		claimedAt: z.number(),
+		expiresAt: z.number(),
+		heartbeatAt: z.number(),
+		pid: z.number().nullable(),
+	})
+	.nullable();
+export type RuntimeTaskClaim = z.infer<typeof runtimeTaskClaimSchema>;
+
 export const runtimeBoardCardSchema = z.object({
 	id: z.string(),
 	prompt: z.string(),
 	profileId: z.string().optional(),
 	requiredCapabilities: z.array(z.string()).optional(),
 	blockedReason: z.string().nullable().optional(),
+	claim: runtimeTaskClaimSchema.optional(),
+	attemptCount: z.number().int().nonnegative().optional(),
+	maxAttempts: z.number().int().positive().optional(),
+	lastError: z.string().nullable().optional(),
+	lastRunId: z.string().nullable().optional(),
 	startInPlanMode: z.boolean(),
 	autoReviewEnabled: z.boolean().optional(),
 	autoReviewMode: runtimeTaskAutoReviewModeSchema.optional(),
@@ -118,9 +135,64 @@ export const runtimeBoardDependencySchema = z.object({
 });
 export type RuntimeBoardDependency = z.infer<typeof runtimeBoardDependencySchema>;
 
+export const runtimeTaskEventTypeSchema = z.enum([
+	"created",
+	"updated",
+	"moved",
+	"triaged",
+	"blocked",
+	"unblocked",
+	"claimed",
+	"heartbeat",
+	"released",
+	"started",
+	"completed",
+	"failed",
+	"reclaimed",
+	"dependency_linked",
+	"dependency_unlinked",
+	"deleted",
+]);
+export type RuntimeTaskEventType = z.infer<typeof runtimeTaskEventTypeSchema>;
+
+export const runtimeTaskEventSchema = z.object({
+	id: z.string(),
+	taskId: z.string(),
+	type: runtimeTaskEventTypeSchema,
+	createdAt: z.number(),
+	actor: z.string().optional(),
+	runId: z.string().nullable().optional(),
+	fromColumnId: runtimeBoardColumnIdSchema.nullable().optional(),
+	toColumnId: runtimeBoardColumnIdSchema.nullable().optional(),
+	message: z.string().nullable().optional(),
+	metadata: z.record(z.string(), z.unknown()).optional(),
+});
+export type RuntimeTaskEvent = z.infer<typeof runtimeTaskEventSchema>;
+
+export const runtimeTaskRunStatusSchema = z.enum(["claimed", "running", "succeeded", "failed", "reclaimed", "cancelled"]);
+export type RuntimeTaskRunStatus = z.infer<typeof runtimeTaskRunStatusSchema>;
+
+export const runtimeTaskRunSchema = z.object({
+	id: z.string(),
+	taskId: z.string(),
+	profileId: z.string().nullable(),
+	agentId: runtimeAgentIdSchema.nullable(),
+	status: runtimeTaskRunStatusSchema,
+	startedAt: z.number(),
+	updatedAt: z.number(),
+	finishedAt: z.number().nullable().optional(),
+	pid: z.number().nullable(),
+	error: z.string().nullable().optional(),
+	summary: z.string().nullable().optional(),
+	metadata: z.record(z.string(), z.unknown()).optional(),
+});
+export type RuntimeTaskRun = z.infer<typeof runtimeTaskRunSchema>;
+
 export const runtimeBoardDataSchema = z.object({
 	columns: z.array(runtimeBoardColumnSchema),
 	dependencies: z.array(runtimeBoardDependencySchema).default([]),
+	events: z.array(runtimeTaskEventSchema).optional(),
+	runs: z.array(runtimeTaskRunSchema).optional(),
 });
 export type RuntimeBoardData = z.infer<typeof runtimeBoardDataSchema>;
 
