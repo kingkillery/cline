@@ -19,6 +19,9 @@ import {
 
 export interface TaskDraft {
 	prompt: string;
+	profileId?: string;
+	requiredCapabilities?: string[];
+	blockedReason?: string | null;
 	startInPlanMode?: boolean;
 	autoReviewEnabled?: boolean;
 	autoReviewMode?: TaskAutoReviewMode;
@@ -100,6 +103,9 @@ function normalizeCard(rawCard: unknown): BoardCard | null {
 	const card = rawCard as {
 		id?: unknown;
 		prompt?: unknown;
+		profileId?: unknown;
+		requiredCapabilities?: unknown;
+		blockedReason?: unknown;
 		startInPlanMode?: unknown;
 		autoReviewEnabled?: unknown;
 		autoReviewMode?: unknown;
@@ -122,6 +128,12 @@ function normalizeCard(rawCard: unknown): BoardCard | null {
 	return {
 		id: typeof card.id === "string" && card.id ? card.id : createShortTaskId(createBrowserUuid),
 		prompt,
+		profileId: typeof card.profileId === "string" && card.profileId.trim() ? card.profileId.trim() : undefined,
+		requiredCapabilities: Array.isArray(card.requiredCapabilities)
+			? [...new Set(card.requiredCapabilities.filter((value): value is string => typeof value === "string").map((value) => value.trim()).filter(Boolean))]
+			: undefined,
+		blockedReason:
+			typeof card.blockedReason === "string" && card.blockedReason.trim() ? card.blockedReason.trim() : null,
 		startInPlanMode: typeof card.startInPlanMode === "boolean" ? card.startInPlanMode : false,
 		autoReviewEnabled: typeof card.autoReviewEnabled === "boolean" ? card.autoReviewEnabled : false,
 		autoReviewMode: resolveTaskAutoReviewMode(
@@ -269,6 +281,9 @@ export function addTaskToColumnWithResult(
 		columnId,
 		{
 			prompt,
+			profileId: draft.profileId,
+			requiredCapabilities: draft.requiredCapabilities,
+			blockedReason: draft.blockedReason,
 			startInPlanMode: draft.startInPlanMode,
 			autoReviewEnabled: draft.autoReviewEnabled,
 			autoReviewMode: draft.autoReviewMode,
@@ -458,6 +473,12 @@ export function updateTask(board: BoardData, taskId: string, draft: TaskDraft): 
 			return {
 				...card,
 				prompt,
+				profileId: draft.profileId === undefined ? card.profileId : draft.profileId.trim() || undefined,
+				requiredCapabilities:
+					draft.requiredCapabilities === undefined
+						? card.requiredCapabilities
+						: [...new Set(draft.requiredCapabilities.map((capability) => capability.trim()).filter(Boolean))],
+				blockedReason: draft.blockedReason === undefined ? card.blockedReason : draft.blockedReason?.trim() || null,
 				startInPlanMode: Boolean(draft.startInPlanMode),
 				autoReviewEnabled: Boolean(draft.autoReviewEnabled),
 				autoReviewMode: resolveTaskAutoReviewMode(draft.autoReviewMode ?? DEFAULT_TASK_AUTO_REVIEW_MODE),

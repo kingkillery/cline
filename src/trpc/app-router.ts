@@ -71,6 +71,7 @@ import type {
 	RuntimeTaskSessionStopResponse,
 	RuntimeTaskWorkspaceInfoRequest,
 	RuntimeTaskWorkspaceInfoResponse,
+	RuntimeToolStatusResponse,
 	RuntimeWorkspaceChangesRequest,
 	RuntimeWorkspaceChangesResponse,
 	RuntimeWorkspaceFileSearchRequest,
@@ -82,6 +83,7 @@ import type {
 	RuntimeWorktreeDeleteResponse,
 	RuntimeWorktreeEnsureRequest,
 	RuntimeWorktreeEnsureResponse,
+	RuntimeWorkerProfilesResponse,
 } from "../core/api-contract";
 import {
 	runtimeClineAccountProfileResponseSchema,
@@ -149,6 +151,7 @@ import {
 	runtimeTaskSessionStopResponseSchema,
 	runtimeTaskWorkspaceInfoRequestSchema,
 	runtimeTaskWorkspaceInfoResponseSchema,
+	runtimeToolStatusResponseSchema,
 	runtimeWorkspaceChangesRequestSchema,
 	runtimeWorkspaceChangesResponseSchema,
 	runtimeWorkspaceFileSearchRequestSchema,
@@ -160,6 +163,7 @@ import {
 	runtimeWorktreeDeleteResponseSchema,
 	runtimeWorktreeEnsureRequestSchema,
 	runtimeWorktreeEnsureResponseSchema,
+	runtimeWorkerProfilesResponseSchema,
 } from "../core/api-contract";
 
 export interface RuntimeTrpcWorkspaceScope {
@@ -172,6 +176,8 @@ export interface RuntimeTrpcContext {
 	workspaceScope: RuntimeTrpcWorkspaceScope | null;
 	runtimeApi: {
 		loadConfig: (scope: RuntimeTrpcWorkspaceScope | null) => Promise<RuntimeConfigResponse>;
+		getToolStatuses: (scope: RuntimeTrpcWorkspaceScope | null) => Promise<RuntimeToolStatusResponse>;
+		getWorkerProfiles: (scope: RuntimeTrpcWorkspaceScope | null) => Promise<RuntimeWorkerProfilesResponse>;
 		saveConfig: (
 			scope: RuntimeTrpcWorkspaceScope | null,
 			input: RuntimeConfigSaveRequest,
@@ -381,6 +387,12 @@ export const runtimeAppRouter = t.router({
 	runtime: t.router({
 		getConfig: t.procedure.output(runtimeConfigResponseSchema).query(async ({ ctx }) => {
 			return await ctx.runtimeApi.loadConfig(ctx.workspaceScope);
+		}),
+		getToolStatuses: t.procedure.output(runtimeToolStatusResponseSchema).query(async ({ ctx }) => {
+			return await ctx.runtimeApi.getToolStatuses(ctx.workspaceScope);
+		}),
+		getWorkerProfiles: t.procedure.output(runtimeWorkerProfilesResponseSchema).query(async ({ ctx }) => {
+			return await ctx.runtimeApi.getWorkerProfiles(ctx.workspaceScope);
 		}),
 		saveConfig: t.procedure
 			.input(runtimeConfigSaveRequestSchema)

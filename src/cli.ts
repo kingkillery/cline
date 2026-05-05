@@ -5,8 +5,11 @@ import { Command, Option } from "commander";
 import ora, { type Ora } from "ora";
 import packageJson from "../package.json" with { type: "json" };
 import { disposeCliTelemetryService } from "./cline-sdk/cline-telemetry-service.js";
+import { registerDispatcherCommand } from "./commands/dispatcher";
 import { registerHooksCommand } from "./commands/hooks";
+import { registerProfilesCommand } from "./commands/profiles";
 import { registerTaskCommand } from "./commands/task";
+import { registerToolsCommand } from "./commands/tools";
 import { loadGlobalRuntimeConfig, loadRuntimeConfig } from "./config/runtime-config";
 import type { RuntimeCommandRunResponse } from "./core/api-contract";
 import { createGitProcessEnv } from "./core/git-process-env";
@@ -591,6 +594,9 @@ function createProgram(invocationArgs: string[]): Command {
 
 	registerTaskCommand(program);
 	registerHooksCommand(program);
+	registerToolsCommand(program);
+	registerProfilesCommand(program);
+	registerDispatcherCommand(program);
 
 	program
 		.command("mcp")

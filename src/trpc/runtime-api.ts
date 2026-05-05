@@ -35,6 +35,8 @@ import {
 	parseTaskSessionStopRequest,
 } from "../core/api-validation";
 import { isHomeAgentSessionId } from "../core/home-agent-session";
+import { detectRuntimeTools } from "../core/tool-detection";
+import { getWorkerProfiles } from "../core/worker-profiles";
 import { openInBrowser } from "../server/browser";
 import { buildRuntimeConfigResponse, resolveAgentCommand } from "../terminal/agent-registry";
 import type { TerminalSessionManager } from "../terminal/session-manager";
@@ -114,6 +116,12 @@ export function createRuntimeApi(deps: CreateRuntimeApiDependencies): RuntimeTrp
 			}
 			return buildConfigResponse(scopedRuntimeConfig);
 		},
+		getToolStatuses: async (_workspaceScope) => {
+			return detectRuntimeTools();
+		},
+		getWorkerProfiles: async (_workspaceScope) => {
+			return getWorkerProfiles();
+		},
 		saveConfig: async (workspaceScope, input) => {
 			const parsed = parseRuntimeConfigSaveRequest(input);
 			let nextRuntimeConfig: RuntimeConfigState;
@@ -166,7 +174,7 @@ export function createRuntimeApi(deps: CreateRuntimeApiDependencies): RuntimeTrp
 				const previousTerminalAgentId = body.resumeFromTrash
 					? (terminalManager.getSummary(body.taskId)?.agentId ?? null)
 					: null;
-				const effectiveAgentId = previousTerminalAgentId ?? scopedRuntimeConfig.selectedAgentId;
+				const effectiveAgentId = body.agentId ?? previousTerminalAgentId ?? scopedRuntimeConfig.selectedAgentId;
 				let useClinePath = effectiveAgentId === "cline";
 				if (body.resumeFromTrash && !useClinePath) {
 					const clineSessionService = await deps.getScopedClineTaskSessionService(workspaceScope);

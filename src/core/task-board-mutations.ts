@@ -11,6 +11,9 @@ import { createUniqueTaskId } from "./task-id";
 export interface RuntimeCreateTaskInput {
 	taskId?: string;
 	prompt: string;
+	profileId?: string;
+	requiredCapabilities?: string[];
+	blockedReason?: string | null;
 	startInPlanMode?: boolean;
 	autoReviewEnabled?: boolean;
 	autoReviewMode?: RuntimeTaskAutoReviewMode;
@@ -20,6 +23,9 @@ export interface RuntimeCreateTaskInput {
 
 export interface RuntimeUpdateTaskInput {
 	prompt: string;
+	profileId?: string;
+	requiredCapabilities?: string[];
+	blockedReason?: string | null;
 	startInPlanMode?: boolean;
 	autoReviewEnabled?: boolean;
 	autoReviewMode?: RuntimeTaskAutoReviewMode;
@@ -37,6 +43,11 @@ function normalizeTaskAutoReviewMode(value: RuntimeTaskAutoReviewMode | null | u
 // Copy image metadata so board tasks do not retain caller-owned array or object references.
 function cloneTaskImages(images?: RuntimeTaskImage[]): RuntimeTaskImage[] | undefined {
 	return images && images.length > 0 ? images.map((image) => ({ ...image })) : undefined;
+}
+
+function cloneRequiredCapabilities(requiredCapabilities?: string[]): string[] | undefined {
+	const normalized = [...new Set((requiredCapabilities ?? []).map((capability) => capability.trim()).filter(Boolean))];
+	return normalized.length > 0 ? normalized : undefined;
 }
 
 export interface RuntimeCreateTaskResult {
@@ -280,6 +291,9 @@ export function addTaskToColumn(
 	const task: RuntimeBoardCard = {
 		id: explicitTaskId || createUniqueTaskId(existingIds, randomUuid),
 		prompt,
+		profileId: input.profileId?.trim() || undefined,
+		requiredCapabilities: cloneRequiredCapabilities(input.requiredCapabilities),
+		blockedReason: input.blockedReason?.trim() || null,
 		startInPlanMode: Boolean(input.startInPlanMode),
 		autoReviewEnabled: Boolean(input.autoReviewEnabled),
 		autoReviewMode: normalizeTaskAutoReviewMode(input.autoReviewMode),
@@ -593,6 +607,12 @@ export function updateTask(
 			updatedTask = {
 				...card,
 				prompt,
+				profileId: input.profileId === undefined ? card.profileId : input.profileId.trim() || undefined,
+				requiredCapabilities:
+					input.requiredCapabilities === undefined
+						? card.requiredCapabilities
+						: cloneRequiredCapabilities(input.requiredCapabilities),
+				blockedReason: input.blockedReason === undefined ? card.blockedReason : input.blockedReason?.trim() || null,
 				startInPlanMode: Boolean(input.startInPlanMode),
 				autoReviewEnabled: Boolean(input.autoReviewEnabled),
 				autoReviewMode: normalizeTaskAutoReviewMode(input.autoReviewMode),

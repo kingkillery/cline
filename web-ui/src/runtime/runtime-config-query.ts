@@ -22,11 +22,23 @@ import type {
 	RuntimeDebugResetAllStateResponse,
 	RuntimeFeaturebaseTokenResponse,
 	RuntimeProjectShortcut,
+	RuntimeToolStatusResponse,
+	RuntimeWorkerProfilesResponse,
 } from "@/runtime/types";
 
 export async function fetchRuntimeConfig(workspaceId: string | null): Promise<RuntimeConfigResponse> {
 	const trpcClient = getRuntimeTrpcClient(workspaceId);
 	return await trpcClient.runtime.getConfig.query();
+}
+
+export async function fetchRuntimeToolStatuses(workspaceId: string | null): Promise<RuntimeToolStatusResponse> {
+	const trpcClient = getRuntimeTrpcClient(workspaceId);
+	return await trpcClient.runtime.getToolStatuses.query();
+}
+
+export async function fetchRuntimeWorkerProfiles(workspaceId: string | null): Promise<RuntimeWorkerProfilesResponse> {
+	const trpcClient = getRuntimeTrpcClient(workspaceId);
+	return await trpcClient.runtime.getWorkerProfiles.query();
 }
 
 export async function saveRuntimeConfig(

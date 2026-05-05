@@ -169,6 +169,11 @@ function resolveTaskBaseRef(state: RuntimeWorkspaceStateResponse): string {
 	return state.git.currentBranch ?? state.git.defaultBranch ?? state.git.branches[0] ?? "";
 }
 
+function collectStringOption(value: string, previous: string[] = []): string[] {
+	const trimmed = value.trim();
+	return trimmed ? [...previous, trimmed] : previous;
+}
+
 function resolveTaskCreateColumnId(board: RuntimeWorkspaceStateResponse["board"]): RuntimeBoardColumnId {
 	return board.columns.some((column) => column.id === "triage") ? "triage" : "backlog";
 }
@@ -203,6 +208,9 @@ function formatTaskRecord(
 		startInPlanMode: task.startInPlanMode,
 		autoReviewEnabled: task.autoReviewEnabled === true,
 		autoReviewMode: task.autoReviewMode ?? "commit",
+		profileId: task.profileId ?? null,
+		requiredCapabilities: task.requiredCapabilities ?? [],
+		blockedReason: task.blockedReason ?? null,
 		createdAt: task.createdAt,
 		updatedAt: task.updatedAt,
 		session: session
@@ -330,6 +338,9 @@ async function createTask(input: {
 	startInPlanMode?: boolean;
 	autoReviewEnabled?: boolean;
 	autoReviewMode?: "commit" | "pr" | "move_to_trash";
+	profileId?: string;
+	requiredCapabilities?: string[];
+	blockedReason?: string | null;
 }): Promise<JsonRecord> {
 	const workspaceRepoPath = await resolveWorkspaceRepoPath(input.projectPath, input.cwd);
 	const workspaceId = await ensureRuntimeWorkspace(workspaceRepoPath);
@@ -348,6 +359,9 @@ async function createTask(input: {
 				startInPlanMode: input.startInPlanMode,
 				autoReviewEnabled: input.autoReviewEnabled,
 				autoReviewMode: input.autoReviewMode,
+				profileId: input.profileId,
+				requiredCapabilities: input.requiredCapabilities,
+				blockedReason: input.blockedReason,
 				baseRef: resolvedBaseRef,
 			},
 			() => globalThis.crypto.randomUUID(),
@@ -385,13 +399,19 @@ async function updateTaskCommand(input: {
 	startInPlanMode?: boolean;
 	autoReviewEnabled?: boolean;
 	autoReviewMode?: "commit" | "pr" | "move_to_trash";
+	profileId?: string;
+	requiredCapabilities?: string[];
+	blockedReason?: string | null;
 }): Promise<JsonRecord> {
 	if (
 		input.prompt === undefined &&
 		input.baseRef === undefined &&
 		input.startInPlanMode === undefined &&
 		input.autoReviewEnabled === undefined &&
-		input.autoReviewMode === undefined
+		input.autoReviewMode === undefined &&
+		input.profileId === undefined &&
+		input.requiredCapabilities === undefined &&
+		input.blockedReason === undefined
 	) {
 		throw new Error("task update requires at least one field to change.");
 	}
@@ -411,6 +431,9 @@ async function updateTaskCommand(input: {
 			startInPlanMode: input.startInPlanMode ?? taskRecord.task.startInPlanMode,
 			autoReviewEnabled: input.autoReviewEnabled ?? taskRecord.task.autoReviewEnabled === true,
 			autoReviewMode: input.autoReviewMode ?? taskRecord.task.autoReviewMode ?? "commit",
+			profileId: input.profileId ?? taskRecord.task.profileId,
+			requiredCapabilities: input.requiredCapabilities ?? taskRecord.task.requiredCapabilities,
+			blockedReason: input.blockedReason ?? taskRecord.task.blockedReason,
 		});
 		if (!updatedTask.updated || !updatedTask.task) {
 			throw new Error(`Task "${input.taskId}" could not be updated.`);
@@ -944,6 +967,9 @@ export function registerTaskCommand(program: Command): void {
 		.option("--start-in-plan-mode [value]", "Set plan mode (true|false). Flag-only implies true.")
 		.option("--auto-review-enabled [value]", "Enable auto-review behavior (true|false). Flag-only implies true.")
 		.option("--auto-review-mode <mode>", "Auto-review mode: commit | pr | move_to_trash.", parseAutoReviewMode)
+		.option("--profile-id <id>", "Worker profile assignment for dispatcher routing.")
+		.option("--required-capability <capability>", "Required tool capability. Repeatable.", collectStringOption, [])
+		.option("--blocked-reason <text>", "Mark the task blocked with a reason.")
 		.action(
 			async (options: {
 				prompt: string;
@@ -952,6 +978,9 @@ export function registerTaskCommand(program: Command): void {
 				startInPlanMode?: unknown;
 				autoReviewEnabled?: unknown;
 				autoReviewMode?: "commit" | "pr" | "move_to_trash";
+				profileId?: string;
+				requiredCapability?: string[];
+				blockedReason?: string;
 			}) => {
 				await runTaskCommand(
 					async () =>
@@ -963,6 +992,9 @@ export function registerTaskCommand(program: Command): void {
 							startInPlanMode: parseOptionalBooleanOption(options.startInPlanMode, "--start-in-plan-mode"),
 							autoReviewEnabled: parseOptionalBooleanOption(options.autoReviewEnabled, "--auto-review-enabled"),
 							autoReviewMode: options.autoReviewMode,
+							profileId: options.profileId,
+							requiredCapabilities: options.requiredCapability,
+							blockedReason: options.blockedReason,
 						}),
 				);
 			},
@@ -978,6 +1010,9 @@ export function registerTaskCommand(program: Command): void {
 		.option("--start-in-plan-mode [value]", "Set plan mode (true|false). Flag-only implies true.")
 		.option("--auto-review-enabled [value]", "Enable auto-review behavior (true|false). Flag-only implies true.")
 		.option("--auto-review-mode <mode>", "Auto-review mode: commit | pr | move_to_trash.", parseAutoReviewMode)
+		.option("--profile-id <id>", "Replacement worker profile assignment.")
+		.option("--required-capability <capability>", "Replacement required capability. Repeatable.", collectStringOption)
+		.option("--blocked-reason <text>", "Replacement blocked reason. Use an empty string to clear.")
 		.action(
 			async (options: {
 				taskId: string;
@@ -987,6 +1022,9 @@ export function registerTaskCommand(program: Command): void {
 				startInPlanMode?: unknown;
 				autoReviewEnabled?: unknown;
 				autoReviewMode?: "commit" | "pr" | "move_to_trash";
+				profileId?: string;
+				requiredCapability?: string[];
+				blockedReason?: string;
 			}) => {
 				await runTaskCommand(
 					async () =>
@@ -999,6 +1037,9 @@ export function registerTaskCommand(program: Command): void {
 							startInPlanMode: parseOptionalBooleanOption(options.startInPlanMode, "--start-in-plan-mode"),
 							autoReviewEnabled: parseOptionalBooleanOption(options.autoReviewEnabled, "--auto-review-enabled"),
 							autoReviewMode: options.autoReviewMode,
+							profileId: options.profileId,
+							requiredCapabilities: options.requiredCapability,
+							blockedReason: options.blockedReason,
 						}),
 				);
 			},

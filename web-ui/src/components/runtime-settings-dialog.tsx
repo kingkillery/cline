@@ -25,12 +25,18 @@ import type { FeaturebaseFeedbackState } from "@/hooks/use-featurebase-feedback-
 import { useRuntimeSettingsClineController } from "@/hooks/use-runtime-settings-cline-controller";
 import { useRuntimeSettingsClineMcpController } from "@/hooks/use-runtime-settings-cline-mcp-controller";
 import { getRuntimeClineProviderSettings } from "@/runtime/native-agent";
-import { openFileOnHost } from "@/runtime/runtime-config-query";
+import {
+	fetchRuntimeToolStatuses,
+	fetchRuntimeWorkerProfiles,
+	openFileOnHost,
+} from "@/runtime/runtime-config-query";
 import type {
 	RuntimeAgentId,
 	RuntimeClineMcpServerAuthStatus,
 	RuntimeConfigResponse,
 	RuntimeProjectShortcut,
+	RuntimeToolStatus,
+	RuntimeWorkerProfile,
 } from "@/runtime/types";
 import { useRuntimeConfig } from "@/runtime/use-runtime-config";
 import {
@@ -188,6 +194,24 @@ function AgentRow({
 	);
 }
 
+function RuntimeSetupStatusPill({ status }: { status: RuntimeToolStatus["status"] }): React.ReactElement {
+	const label =
+		status === "ready" ? "Ready" : status === "needs_auth" ? "Login needed" : status === "missing" ? "Missing" : "Unknown";
+	return (
+		<span
+			className={cn(
+				"inline-flex items-center rounded px-1.5 py-0.5 text-xs font-medium",
+				status === "ready" && "bg-status-green/10 text-status-green",
+				status === "needs_auth" && "bg-status-orange/10 text-status-orange",
+				status === "missing" && "bg-status-red/10 text-status-red",
+				status === "unknown" && "bg-surface-3 text-text-secondary",
+			)}
+		>
+			{label}
+		</span>
+	);
+}
+
 function InlineUtilityButton({
 	text,
 	onClick,
@@ -313,6 +337,9 @@ export function RuntimeSettingsDialog({
 	const [copiedVariableToken, setCopiedVariableToken] = useState<string | null>(null);
 	const [saveError, setSaveError] = useState<string | null>(null);
 	const [pendingShortcutScrollIndex, setPendingShortcutScrollIndex] = useState<number | null>(null);
+	const [runtimeToolStatuses, setRuntimeToolStatuses] = useState<RuntimeToolStatus[]>([]);
+	const [workerProfiles, setWorkerProfiles] = useState<RuntimeWorkerProfile[]>([]);
+	const [setupStatusError, setSetupStatusError] = useState<string | null>(null);
 	const copiedVariableResetTimerRef = useRef<number | null>(null);
 	const shortcutsSectionRef = useRef<HTMLHeadingElement | null>(null);
 	const shortcutRowRefs = useRef<Array<HTMLDivElement | null>>([]);
@@ -469,6 +496,31 @@ export function RuntimeSettingsDialog({
 		}
 		refreshNotificationPermission();
 	}, [open, refreshNotificationPermission]);
+
+	useEffect(() => {
+		if (!open) {
+			return;
+		}
+		let cancelled = false;
+		setSetupStatusError(null);
+		void Promise.all([fetchRuntimeToolStatuses(workspaceId), fetchRuntimeWorkerProfiles(workspaceId)])
+			.then(([toolStatusResponse, workerProfilesResponse]) => {
+				if (cancelled) {
+					return;
+				}
+				setRuntimeToolStatuses(toolStatusResponse.tools);
+				setWorkerProfiles(workerProfilesResponse.profiles);
+			})
+			.catch((error) => {
+				if (cancelled) {
+					return;
+				}
+				setSetupStatusError(error instanceof Error ? error.message : String(error));
+			});
+		return () => {
+			cancelled = true;
+		};
+	}, [open, workspaceId]);
 	useWindowEvent("focus", open ? refreshNotificationPermission : null);
 
 	useEffect(() => {
@@ -671,6 +723,48 @@ export function RuntimeSettingsDialog({
 						onError={setSaveError}
 					/>
 				) : null}
+
+				<h6 className="font-semibold text-text-primary mt-4 mb-1">Dispatcher setup</h6>
+				<p className="text-text-secondary text-[13px] mt-0 mb-2">
+					Profiles and tool readiness used when dispatcher starts Todo tasks.
+				</p>
+				<div className="grid gap-2" style={{ gridTemplateColumns: "1fr 1fr" }}>
+					<div className="rounded-md border border-border bg-surface-2 p-2">
+						<div className="flex items-center justify-between gap-2 mb-1">
+							<span className="text-[13px] font-medium text-text-primary">Tools</span>
+							<span className="text-xs text-text-secondary">{runtimeToolStatuses.length}</span>
+						</div>
+						<div className="space-y-1">
+							{runtimeToolStatuses.slice(0, 6).map((tool) => (
+								<div key={tool.id} className="flex items-center justify-between gap-2">
+									<span className="text-xs text-text-secondary truncate">{tool.label}</span>
+									<RuntimeSetupStatusPill status={tool.status} />
+								</div>
+							))}
+							{runtimeToolStatuses.length === 0 ? (
+								<p className="text-xs text-text-tertiary m-0">Checking tool readiness...</p>
+							) : null}
+						</div>
+					</div>
+					<div className="rounded-md border border-border bg-surface-2 p-2">
+						<div className="flex items-center justify-between gap-2 mb-1">
+							<span className="text-[13px] font-medium text-text-primary">Profiles</span>
+							<span className="text-xs text-text-secondary">{workerProfiles.length}</span>
+						</div>
+						<div className="space-y-1">
+							{workerProfiles.map((profile) => (
+								<div key={profile.id} className="flex items-center justify-between gap-2">
+									<span className="text-xs text-text-secondary truncate">{profile.label}</span>
+									<span className="text-xs text-text-tertiary">{profile.agentId}</span>
+								</div>
+							))}
+							{workerProfiles.length === 0 ? (
+								<p className="text-xs text-text-tertiary m-0">Checking profiles...</p>
+							) : null}
+						</div>
+					</div>
+				</div>
+				{setupStatusError ? <p className="text-status-red text-xs mt-2 mb-0">{setupStatusError}</p> : null}
 
 				<div className="flex items-center justify-between mt-4 mb-1">
 					<h6 className="font-semibold text-text-primary m-0">Git button prompts</h6>

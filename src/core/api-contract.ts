@@ -70,7 +70,7 @@ export const runtimeSlashCommandsResponseSchema = z.object({
 });
 export type RuntimeSlashCommandsResponse = z.infer<typeof runtimeSlashCommandsResponseSchema>;
 
-export const runtimeAgentIdSchema = z.enum(["claude", "codex", "gemini", "opencode", "droid", "cline"]);
+export const runtimeAgentIdSchema = z.enum(["claude", "codex", "gemini", "opencode", "droid", "cline", "copilot"]);
 export type RuntimeAgentId = z.infer<typeof runtimeAgentIdSchema>;
 
 export const runtimeBoardColumnIdSchema = z.enum(["triage", "backlog", "in_progress", "review", "trash"]);
@@ -90,6 +90,9 @@ export type RuntimeTaskImage = z.infer<typeof runtimeTaskImageSchema>;
 export const runtimeBoardCardSchema = z.object({
 	id: z.string(),
 	prompt: z.string(),
+	profileId: z.string().optional(),
+	requiredCapabilities: z.array(z.string()).optional(),
+	blockedReason: z.string().nullable().optional(),
 	startInPlanMode: z.boolean(),
 	autoReviewEnabled: z.boolean().optional(),
 	autoReviewMode: runtimeTaskAutoReviewModeSchema.optional(),
@@ -186,6 +189,23 @@ export type RuntimeTaskSessionState = z.infer<typeof runtimeTaskSessionStateSche
 export const runtimeTaskSessionModeSchema = z.enum(["act", "plan"]);
 export type RuntimeTaskSessionMode = z.infer<typeof runtimeTaskSessionModeSchema>;
 
+export const runtimeWorkerProfileSchema = z.object({
+	id: z.string(),
+	label: z.string(),
+	description: z.string(),
+	agentId: runtimeAgentIdSchema,
+	requiredCapabilities: z.array(z.string()),
+	optionalCapabilities: z.array(z.string()),
+	defaultTaskMode: runtimeTaskSessionModeSchema,
+});
+export type RuntimeWorkerProfile = z.infer<typeof runtimeWorkerProfileSchema>;
+
+export const runtimeWorkerProfilesResponseSchema = z.object({
+	profiles: z.array(runtimeWorkerProfileSchema),
+	generatedAt: z.number(),
+});
+export type RuntimeWorkerProfilesResponse = z.infer<typeof runtimeWorkerProfilesResponseSchema>;
+
 export const runtimeTaskSessionReviewReasonSchema = z
 	.enum(["attention", "exit", "error", "interrupted", "hook"])
 	.nullable();
@@ -210,6 +230,19 @@ export const runtimeTaskTurnCheckpointSchema = z.object({
 });
 export type RuntimeTaskTurnCheckpoint = z.infer<typeof runtimeTaskTurnCheckpointSchema>;
 
+export const runtimeTaskSessionHandoffSchema = z
+	.object({
+		changed_files: z.array(z.string()).default([]),
+		decisions: z.array(z.string()).default([]),
+		tests_run: z.array(z.string()).default([]),
+		errors: z.array(z.string()).default([]),
+		benchmarks: z.record(z.string(), z.unknown()).optional(),
+		review_status: z.enum(["approved", "changes_requested", "blocked", "unknown"]).optional(),
+		merge_conflicts: z.array(z.string()).optional(),
+	})
+	.nullable()
+	.default(null);
+
 export const runtimeTaskSessionSummarySchema = z.object({
 	taskId: z.string(),
 	state: runtimeTaskSessionStateSchema,
@@ -227,7 +260,9 @@ export const runtimeTaskSessionSummarySchema = z.object({
 	warningMessage: z.string().nullable().optional(),
 	latestTurnCheckpoint: runtimeTaskTurnCheckpointSchema.nullable().optional(),
 	previousTurnCheckpoint: runtimeTaskTurnCheckpointSchema.nullable().optional(),
+	handoff: runtimeTaskSessionHandoffSchema.optional(),
 });
+export type RuntimeTaskSessionHandoff = z.infer<typeof runtimeTaskSessionHandoffSchema>;
 export type RuntimeTaskSessionSummary = z.infer<typeof runtimeTaskSessionSummarySchema>;
 
 export const runtimeWorkspaceStateResponseSchema = z.object({
@@ -736,6 +771,28 @@ export const runtimeAgentDefinitionSchema = z.object({
 });
 export type RuntimeAgentDefinition = z.infer<typeof runtimeAgentDefinitionSchema>;
 
+export const runtimeToolAuthStateSchema = z.enum(["authenticated", "unauthenticated", "unknown", "not_applicable"]);
+export type RuntimeToolAuthState = z.infer<typeof runtimeToolAuthStateSchema>;
+
+export const runtimeToolStatusSchema = z.object({
+	id: z.string(),
+	label: z.string(),
+	command: z.string(),
+	installed: z.boolean(),
+	authState: runtimeToolAuthStateSchema,
+	status: z.enum(["ready", "missing", "needs_auth", "unknown"]),
+	detail: z.string().nullable(),
+	capabilities: z.array(z.string()),
+	agentId: runtimeAgentIdSchema.optional(),
+});
+export type RuntimeToolStatus = z.infer<typeof runtimeToolStatusSchema>;
+
+export const runtimeToolStatusResponseSchema = z.object({
+	tools: z.array(runtimeToolStatusSchema),
+	generatedAt: z.number(),
+});
+export type RuntimeToolStatusResponse = z.infer<typeof runtimeToolStatusResponseSchema>;
+
 export const runtimeConfigResponseSchema = z.object({
 	selectedAgentId: runtimeAgentIdSchema,
 	selectedShortcutLabel: z.string().nullable(),
@@ -770,6 +827,7 @@ export type RuntimeConfigSaveRequest = z.infer<typeof runtimeConfigSaveRequestSc
 export const runtimeTaskSessionStartRequestSchema = z.object({
 	taskId: z.string(),
 	prompt: z.string(),
+	agentId: runtimeAgentIdSchema.optional(),
 	images: z.array(runtimeTaskImageSchema).optional(),
 	startInPlanMode: z.boolean().optional(),
 	mode: runtimeTaskSessionModeSchema.optional(),
